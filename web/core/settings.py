@@ -57,6 +57,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -135,11 +136,17 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles-build"
 
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
-    BASE_DIR / "staticfiles",
+    path
+    for path in (
+        BASE_DIR / "static",
+        BASE_DIR / "staticfiles",
+    )
+    if path.exists()
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Celery
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")

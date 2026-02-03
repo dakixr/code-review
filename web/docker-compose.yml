@@ -12,6 +12,7 @@ services:
     env_file:
       - ./.env
     environment:
+      RUN_DJANGO_COMMANDS: "true"
       UV_PROJECT_ENVIRONMENT: /opt/venv
       UV_LINK_MODE: copy
     volumes:

@@ -15,6 +15,7 @@ dependencies = [
     "pyjwt>=2.9.0",
     "redis>=6.0.0",
     "sourcetypes>=0.0.4",
+    "whitenoise>=6.7.0",
 ]
 
 [tool.htpy-uikit]

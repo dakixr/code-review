@@ -29,3 +29,6 @@ COPY . .
 COPY --from=css-builder /app/staticfiles/css/output.css /app/staticfiles/css/output.css
 
 ENV PATH="/opt/venv/bin:$PATH"
+
+RUN chmod +x /app/docker-entrypoint.sh
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
