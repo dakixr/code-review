@@ -8,7 +8,7 @@ services:
   web:
     build:
       context: .
-    command: /opt/venv/bin/python manage.py runserver 0.0.0.0:8000
+    command: /opt/venv/bin/python manage.py runserver 0.0.0.0:7999
     env_file:
       - ./.env
     environment:
@@ -18,7 +18,7 @@ services:
       - .:/app
       - /app/.venv
     ports:
-      - "8000:8000"
+      - "7999:7999"
     depends_on:
       - redis
   worker:

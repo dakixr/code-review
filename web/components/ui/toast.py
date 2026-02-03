@@ -1,27 +1,26 @@
 import json
 
-from htpy import Node
-from htpy import Renderable
-from htpy import a
-from htpy import div
-from htpy import footer
-from htpy import h2
-from htpy import p
-from htpy import section
-from htpy import span
-from htpy import style
-from htpy import template
-from htpy import with_children
+from htpy import (
+    Node,
+    Renderable,
+    a,
+    div,
+    footer,
+    h2,
+    p,
+    section,
+    span,
+    style,
+    template,
+    with_children,
+)
 from markupsafe import Markup
 from sourcetypes import js
 
-from ._types import TAlign
-from ._types import TCategory
+from ._types import TAlign, TCategory
 from ._utils import merge_classes
 from .button import button_component
-from .icons import toast_icon_error
-from .icons import toast_icon_info
-from .icons import toast_icon_success
+from .icons import toast_icon_error, toast_icon_info, toast_icon_success
 
 
 def toaster(
@@ -71,7 +70,7 @@ def toaster(
         addToast(cfg) {
             cfg = cfg || {};
             const id = this.nextId++;
-            const d = (cfg.duration === -1) ? -1 : (cfg.duration ?? (cfg.category === 'error' ? 8000 : 5000));
+            const d = (cfg.duration === -1) ? -1 : (cfg.duration ?? (cfg.category === 'error' ? 7999 : 5000));
             const toast = {
                 id,
                 open: true,
@@ -286,10 +285,18 @@ def toaster(
                         """)
                         },
                     )[
-                        div(x_show="t.category === 'success'", x_cloak="")[toast_icon_success()],
-                        div(x_show="t.category === 'error'", x_cloak="")[toast_icon_error()],
-                        div(x_show="t.category === 'info'", x_cloak="")[toast_icon_info()],
-                        div(x_show="t.category === 'warning'", x_cloak="")[toast_icon_error()],
+                        div(x_show="t.category === 'success'", x_cloak="")[
+                            toast_icon_success()
+                        ],
+                        div(x_show="t.category === 'error'", x_cloak="")[
+                            toast_icon_error()
+                        ],
+                        div(x_show="t.category === 'info'", x_cloak="")[
+                            toast_icon_info()
+                        ],
+                        div(x_show="t.category === 'warning'", x_cloak="")[
+                            toast_icon_error()
+                        ],
                     ],
                     section()[
                         h2()[span(x_text="t.title")],
