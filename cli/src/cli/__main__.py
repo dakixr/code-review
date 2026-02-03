@@ -184,6 +184,10 @@ Date: YYYY-MM-DD HH:MM
 ## Summary
 - ...
 
+## Confidence Score (0–5)
+# Confidence Score X/5
+- Reasoning: 3–6 lines (complexity, severity, evidence strength, alignment with repo patterns).
+
 ## Files changed
 - `path` — ...
 
@@ -220,14 +224,14 @@ Evidence threshold
 
 Output contract (single response)
 - Reply with **only** the code review in Markdown (no preamble, no meta commentary, no tool output).
+- Always include the Confidence Score header with the score inline (e.g., `# Confidence Score 4/5`).
 - Use this structure:
 ```markdown
 # Review Summary
-- 4-8 bullets describing what changed (plain language).
+- 4–8 bullets describing what changed (plain language).
 
-# Confidence Score (0-5)
-- Score: X/5
-- Reasoning: 3-6 lines (complexity, severity, evidence strength, alignment with repo patterns).
+# Confidence Score X/5
+- Reasoning: 3–6 lines (complexity, severity, evidence strength, alignment with repo patterns).
 
 # Key Issues
 For each issue (sorted by severity desc, then confidence desc):
