@@ -46,6 +46,7 @@ from components.ui.navbar import navbar
 from components.ui.section import section_block
 from components.ui.section import section_header
 from components.ui.textarea import textarea_component
+from components.ui.theme_toggle import theme_toggle
 
 from .github import parse_webhook_body
 from .github import verify_webhook_signature
@@ -71,6 +72,11 @@ CONTENT_CLASS = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
 def render_htpy(content: Renderable) -> HttpResponse:
     return HttpResponse(str(content))
 
+def github_app_install_url() -> str:
+    slug_source = settings.GITHUB_APP_SLUG or settings.GITHUB_APP_NAME
+    slug = slug_source.strip().lower().replace(" ", "-")
+    return f"https://github.com/apps/{slug}/installations/new"
+
 
 def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpResponse:
     flash = _flash_messages(request)
@@ -82,10 +88,10 @@ def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpRespo
             a(href="/rules", class_="hover:text-foreground transition-colors")["Rules"],
             a(href="/account", class_="hover:text-foreground transition-colors")["Account"],
         ],
-        right=div(class_="flex items-center gap-3")
-        [
+        right=div(class_="flex items-center gap-3")[
+            theme_toggle(),
             a(
-                href=f"https://github.com/apps/{settings.GITHUB_APP_NAME}/installations/new",
+                href=github_app_install_url(),
                 class_="text-xs text-muted-foreground hover:text-foreground",
             )["Install GitHub App"],
         ],
@@ -99,6 +105,10 @@ def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpRespo
                 meta(name="viewport", content="width=device-width, initial-scale=1"),
                 title[page_title],
                 link(rel="stylesheet", href=static("css/output.css")),
+                script(
+                    src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js",
+                    defer=True,
+                ),
                 script(src="https://unpkg.com/htmx.org@1.9.12"),
             ],
             body(class_=PAGE_SHELL_CLASS)[
@@ -110,47 +120,119 @@ def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpRespo
 
 
 def home(request: HttpRequest) -> HttpResponse:
-    install_url = f"https://github.com/apps/{settings.GITHUB_APP_NAME}/installations/new"
+    install_url = github_app_install_url()
     hero_actions = div(class_="flex flex-wrap items-center gap-3")[
         a(href=install_url)[button_component(variant="primary")["Install GitHub App"]],
         a(href="/app")[button_component(variant="outline")["Go to dashboard"]],
     ]
-    hero_section = section_block(tone="muted", class_="rounded-2xl border border-border/60")[
-        div(class_="grid gap-6")[
-            section_header(
-                "Automated PR reviews that learn your taste",
-                subtitle=(
-                    "Connect your GitHub org, set global and repo-specific rules, and let the reviewer leave live comments."
-                ),
-                align="left",
-            ),
-            hero_actions,
-        ]
+
+    hero_badges = div(class_="flex flex-wrap gap-2")[
+        span(class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground")[
+            "GitHub App"
+        ],
+        span(class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground")[
+            "HTMX + htpy"
+        ],
+        span(class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground")[
+            "Learns your taste"
+        ],
+    ]
+
+    stats = div(class_="grid gap-4 sm:grid-cols-3")[
+        card(title="<10 sec", description="Time to first 👁 comment")[
+            p(class_="text-sm text-muted-foreground")["Immediate feedback on every PR."]
+        ],
+        card(title="Global + repo", description="Rule sets")[
+            p(class_="text-sm text-muted-foreground")["Tune once or per repo."]
+        ],
+        card(title="Feedback loop", description="Likes, ignore, dislike")[
+            p(class_="text-sm text-muted-foreground")["Signals train the reviewer."]
+        ],
+    ]
+
+    hero = section_block(tone="muted", class_="rounded-2xl border border-border/60")[
+        div(class_="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]")[
+            div(class_="grid gap-4")[
+                hero_badges,
+                h1(class_="text-4xl sm:text-5xl font-semibold tracking-tight")[
+                    "Automated PR reviews that learn your taste"
+                ],
+                p(class_="text-lg text-muted-foreground")[
+                    "Connect your GitHub org, set global and repo-specific rules, and let the reviewer leave live comments with context."
+                ],
+                hero_actions,
+            ],
+            card(title="Live review preview", description="GitHub comment thread")[
+                div(class_="grid gap-3 text-sm text-muted-foreground")[
+                    div(class_="rounded-lg border border-border/60 bg-background/70 p-3")[
+                        "👁 Reviewing this PR now. I'll post details shortly."
+                    ],
+                    div(class_="rounded-lg border border-border/60 bg-background/70 p-3")[
+                        "✅ Found 2 improvements. 1) Add a null guard on \"user.email\". 2) Consider caching the lint results."
+                    ],
+                    div(class_="rounded-lg border border-border/60 bg-background/70 p-3")[
+                        "/ai like"
+                    ],
+                ],
+            ],
+        ],
+    ]
+
+    flow = div(class_="grid gap-6 md:grid-cols-3")[
+        card(title="1. Install the app", description="Org or repo install")[
+            p(class_="text-sm text-muted-foreground")[
+                "Grant permissions once and pick repos in the UI."
+            ]
+        ],
+        card(title="2. Configure rules", description="Global + per repo")[
+            p(class_="text-sm text-muted-foreground")[
+                "Use rule sets to highlight what matters most."
+            ]
+        ],
+        card(title="3. Review & learn", description="Feedback loop")[
+            p(class_="text-sm text-muted-foreground")[
+                "Use /ai like or /ai dislike to tune reviews."
+            ]
+        ],
     ]
 
     features = div(class_="grid gap-6 md:grid-cols-3")[
         card(title="Auto review", description="Runs on PR open or sync.")[
             p(class_="text-sm text-muted-foreground")[
-                "A live status comment starts with 👁 and updates when the review is ready."
+                "A live status comment starts with 👁 and updates when ready."
             ]
         ],
         card(title="Learns you", description="Records feedback.")[
             p(class_="text-sm text-muted-foreground")[
-                "Capture likes, dislikes, and ignore signals to tighten future reviews."
+                "Capture likes, dislikes, and ignore signals to tighten reviews."
             ]
         ],
         card(title="Configurable", description="Global + repo rules.")[
             p(class_="text-sm text-muted-foreground")[
-                "Tune instruction sets per repo without hand-editing config files."
+                "Tune instruction sets per repo without editing config files."
             ]
         ],
     ]
 
-    how_section = section_block()[
-        div(class_="grid gap-6")[section_header("How it works"), features]
+    cta = section_block(tone="bordered", class_="rounded-2xl border border-border/60")[
+        div(class_="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between")[
+            div(class_="grid gap-2")[
+                h2(class_="text-2xl font-semibold")["Ready to ship calmer PR reviews?"],
+                p(class_="text-sm text-muted-foreground")[
+                    "Install the GitHub App and set the first rule set in minutes."
+                ],
+            ],
+            a(href=install_url)[button_component(variant="primary")["Install GitHub App"]],
+        ]
     ]
 
-    content = div(class_="space-y-12")[hero_section, how_section]
+    content = div(class_="space-y-12")[
+        hero,
+        stats,
+        section_block()[div(class_="grid gap-6")[section_header("How it works"), flow]],
+        section_block()[div(class_="grid gap-6")[section_header("What you get"), features]],
+        cta,
+    ]
 
     return layout(request, content, page_title="CodeReview AI")
 
@@ -215,9 +297,7 @@ def account(request: HttpRequest) -> HttpResponse:
 
     content = div(class_="space-y-8")[
         section_header(
-            "Account",
-            subtitle="Create an account to manage installs and rules.",
-            align="left",
+            "Account", subtitle="Create an account to manage installs and rules.", align="left"
         ),
         div(class_="grid gap-6 md:grid-cols-2")[_signup_form(request), _login_form(request)],
     ]
@@ -385,8 +465,10 @@ def _rule_set_form(request: HttpRequest, repositories: Iterable[GithubRepository
         else p(class_="text-sm text-muted-foreground")["Install a repo to enable repo rules."]
     )
 
-    return card(title="Create Rule Set", description="Define global or repo-specific rules.")[
-        form_component(action="/rules/create", method="post")[
+    return card(title="Create Rule Set", description="Define global or repo-specific rules.")
+    [
+        form_component(action="/rules/create", method="post")
+        [
             csrf_input(request),
             form_field[
                 input_component(
@@ -396,19 +478,19 @@ def _rule_set_form(request: HttpRequest, repositories: Iterable[GithubRepository
                 )
             ],
             form_field[
-                div(class_="grid gap-2")[
+                div(class_="grid gap-2")
+                [
                     span(class_="text-sm font-medium")["Scope"],
-                    div(class_="flex flex-wrap gap-4")[
+                    div(class_="flex flex-wrap gap-4")
+                    [
                         label_with_radio("Global", name="scope", value="global", checked=True),
                         label_with_radio("Repository", name="scope", value="repo"),
                     ],
                 ]
             ],
             form_field[
-                div(class_="grid gap-2")[
-                    span(class_="text-sm font-medium")["Repository (optional)"],
-                    repo_block,
-                ]
+                div(class_="grid gap-2")
+                [span(class_="text-sm font-medium")["Repository (optional)"], repo_block]
             ],
             form_field[
                 textarea_component(
@@ -418,7 +500,7 @@ def _rule_set_form(request: HttpRequest, repositories: Iterable[GithubRepository
                     rows=4,
                 )
             ],
-            button_component(type="submit")["Create"],
+            button_component(type="submit")[["Create"]],
         ]
     ]
 
@@ -438,14 +520,16 @@ def _rule_sets_block(request: HttpRequest, rule_sets: Iterable[RuleSet]) -> list
             card(
                 title=rule_set.name,
                 description=f"Scope: {rule_set.scope}",
-            )[
+            )
+            [
                 p(class_="text-sm text-muted-foreground")[
                     rule_set.instructions or "No instructions yet."
                 ],
                 ul(class_="mt-4 space-y-2")[*rules]
                 if rules
                 else p(class_="text-sm text-muted-foreground")["No rules added yet."],
-                form_component(action=f"/rules/{rule_set.id}/add", method="post", class_="mt-4")[
+                form_component(action=f"/rules/{rule_set.id}/add", method="post", class_="mt-4")
+                [
                     csrf_input(request),
                     form_field[
                         input_component(
@@ -468,7 +552,7 @@ def _rule_sets_block(request: HttpRequest, rule_sets: Iterable[RuleSet]) -> list
                             placeholder="info | warn | block",
                         )
                     ],
-                    button_component(type="submit", variant="outline")["Add Rule"],
+                    button_component(type="submit", variant="outline")[["Add Rule"]],
                 ],
             ]
         )
@@ -476,8 +560,10 @@ def _rule_sets_block(request: HttpRequest, rule_sets: Iterable[RuleSet]) -> list
 
 
 def _signup_form(request: HttpRequest) -> Renderable:
-    return card(title="Create account", description="Sign up to manage installs.")[
-        form_component(action="/account/signup", method="post")[
+    return card(title="Create account", description="Sign up to manage installs.")
+    [
+        form_component(action="/account/signup", method="post")
+        [
             csrf_input(request),
             form_field[
                 input_component(name="username", label_text="Username", placeholder="yourname")
@@ -493,27 +579,28 @@ def _signup_form(request: HttpRequest) -> Renderable:
             form_field[
                 input_component(name="password", label_text="Password", type="password")
             ],
-            button_component(type="submit")["Sign up"],
+            button_component(type="submit")[["Sign up"]],
         ]
     ]
 
 
 def _login_form(request: HttpRequest) -> Renderable:
-    return card(title="Sign in", description="Access your existing account.")[
-        form_component(action="/account/login", method="post")[
+    return card(title="Sign in", description="Access your existing account.")
+    [
+        form_component(action="/account/login", method="post")
+        [
             csrf_input(request),
             form_field[input_component(name="username", label_text="Username")],
             form_field[input_component(name="password", label_text="Password", type="password")],
-            button_component(type="submit", variant="outline")["Sign in"],
+            button_component(type="submit", variant="outline")[["Sign in"]],
         ]
     ]
 
 
 def _flash_messages(request: HttpRequest) -> Renderable:
     items = [
-        card(description=str(message), class_="border border-destructive/30")[
-            p(class_="text-sm text-muted-foreground")[str(message)]
-        ]
+        card(description=str(message), class_="border border-destructive/30")
+        [p(class_="text-sm text-muted-foreground")[str(message)]]
         for message in messages.get_messages(request)
     ]
     if not items:

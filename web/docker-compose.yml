@@ -16,6 +16,7 @@ services:
       UV_LINK_MODE: copy
     volumes:
       - .:/app
+      - /app/.venv
     ports:
       - "8000:8000"
     depends_on:
@@ -31,6 +32,7 @@ services:
       UV_LINK_MODE: copy
     volumes:
       - .:/app
+      - /app/.venv
     depends_on:
       - redis
   tailwind:
@@ -39,6 +41,7 @@ services:
     command: sh -c "npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run dev:css"
     volumes:
       - .:/app
+      - /app/node_modules
     depends_on:
       - web
 
