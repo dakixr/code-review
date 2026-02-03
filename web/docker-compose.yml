@@ -1,0 +1,46 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+  web:
+    build:
+      context: .
+    command: /opt/venv/bin/python manage.py runserver 0.0.0.0:8000
+    env_file:
+      - ./.env
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      UV_LINK_MODE: copy
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+  worker:
+    build:
+      context: .
+    command: /opt/venv/bin/celery -A core worker -l info
+    env_file:
+      - ./.env
+    environment:
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+      UV_LINK_MODE: copy
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+  tailwind:
+    image: node:20-slim
+    working_dir: /app
+    command: sh -c "npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run dev:css"
+    volumes:
+      - .:/app
+    depends_on:
+      - web
+
+volumes:
+  redis_data:

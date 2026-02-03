@@ -1,17 +1,11 @@
-from htpy import Renderable
-from htpy import div
-from htpy import header
+from htpy import Renderable, div, header, span
 from htpy import input as input_
-from htpy import span
 from sourcetypes import js
 
-from ._styles import LISTBOX_OPTION_BASE_CLASSES
-from ._styles import POPOVER_PANEL_PADDED_CLASSES
+from ._styles import LISTBOX_OPTION_BASE_CLASSES, POPOVER_PANEL_PADDED_CLASSES
 from ._types import SelectOption
 from .button import button_component
-from .icons import icon_check
-from .icons import icon_chevrons_up_down
-from .icons import icon_search
+from .icons import icon_check, icon_chevrons_up_down, icon_search
 
 
 def combobox(
@@ -66,7 +60,9 @@ def combobox(
                 break
 
     # JS-safe initial value for inlining into x-data factory call
-    initial_value_js = initial_value.replace("'", "\\'") if isinstance(initial_value, str) else ""
+    initial_value_js = (
+        initial_value.replace("'", "\\'") if isinstance(initial_value, str) else ""
+    )
 
     # Container classes - match reference CSS exactly
     container_classes = "select relative inline-flex"
@@ -93,7 +89,9 @@ def combobox(
             "@keydown": "onKey($event)",
         },
     )[
-        span(id=f"{base_id}-label", class_="truncate", **{"x-ref": "selected"})[initial_label],
+        span(id=f"{base_id}-label", class_="truncate", **{"x-ref": "selected"})[
+            initial_label
+        ],
         icon_chevrons_up_down(class_="opacity-50 shrink-0"),
     ]
 
@@ -109,7 +107,9 @@ def combobox(
             **{
                 "data-value": option["value"],
                 "data-label": option["label"],
-                "aria-selected": "true" if (option["value"] == initial_value) else "false",
+                "aria-selected": "true"
+                if (option["value"] == initial_value)
+                else "false",
                 "@click": "updateLabelFromValue($el.dataset.value); closeMenu();",
             },
             class_=f"{LISTBOX_OPTION_BASE_CLASSES} aria-selected:bg-accent aria-selected:text-accent-foreground",
@@ -142,7 +142,7 @@ def combobox(
             "data_side": side,
             "data_align": align,
         },
-        class_=f"{POPOVER_PANEL_PADDED_CLASSES} fixed min-w-48 w-max z-[9999]",
+        class_=f"{POPOVER_PANEL_PADDED_CLASSES} fixed min-w-48 w-max z-9999",
     )[
         # Header with search icon and input - match reference exactly
         header(class_="flex h-9 items-center gap-2 border-b px-3 mb-1 border-border")[
@@ -466,6 +466,8 @@ def combobox(
     root_attrs.update(attrs)
 
     # Root - no need for external JS file anymore
-    root = div(id=base_id, class_=container_classes, **root_attrs)[hidden, trigger_btn, popover]
+    root = div(id=base_id, class_=container_classes, **root_attrs)[
+        hidden, trigger_btn, popover
+    ]
 
     return root

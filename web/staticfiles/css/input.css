@@ -1,0 +1,50 @@
+/* cspell:disable*/
+
+@import "tailwindcss";
+@plugin 'tailwindcss-animate';
+@import "./theme.css";
+@import "./custom.css";
+
+@layer base {
+  * {
+    @apply outline-ring/50;
+  }
+  html {
+    @apply scroll-smooth;
+  }
+  body {
+    @apply bg-background text-foreground overscroll-none antialiased text-sm;
+  }
+  .scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+
+    &::-webkit-scrollbar {
+      width: var(--scrollbar-width);
+    }
+    &::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: var(--scrollbar-radius);
+    }
+  }
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

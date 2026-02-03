@@ -1,0 +1,19 @@
+{
+  "name": "code-review-web",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "pnpm dlx @tailwindcss/cli -i ./staticfiles/css/input.css -o ./staticfiles/css/output.css --minify",
+    "dev:css": "pnpm dlx @tailwindcss/cli -i ./staticfiles/css/input.css -o ./staticfiles/css/output.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.11.0",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.7",
+    "tailwindcss": "^4.1.7",
+    "tailwindcss-animate": "^1.0.7"
+  }
+}
