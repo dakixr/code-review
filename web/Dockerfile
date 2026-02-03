@@ -19,6 +19,11 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock ./
@@ -28,7 +33,10 @@ COPY . .
 
 COPY --from=css-builder /app/staticfiles/css/output.css /app/staticfiles/css/output.css
 
-ENV PATH="/opt/venv/bin:$PATH"
+RUN curl -fsSL https://opencode.ai/install | bash
+RUN mkdir -p /root/.config/opencode && cp /app/opencode.json /root/.config/opencode/opencode.json
+
+ENV PATH="/root/.local/bin:/opt/venv/bin:$PATH"
 
 RUN chmod +x /app/docker-entrypoint.sh
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
