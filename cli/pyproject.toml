@@ -3,16 +3,12 @@ name = "cli"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "dakixr", email = "dakixr@gmail.com" }
-]
+authors = [{ name = "dakixr", email = "dakixr@gmail.com" }]
 requires-python = ">=3.12"
-dependencies = [
-    "typer>=0.21.1",
-]
+dependencies = ["typer>=0.21.1"]
 
 [project.scripts]
-cli = "cli.__main__:run"
+codereview = "cli.__main__:run"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]
