@@ -38,5 +38,5 @@ RUN mkdir -p /root/.config/opencode && cp /app/opencode.json /root/.config/openc
 
 ENV PATH="/root/.local/bin:/opt/venv/bin:$PATH"
 
-RUN chmod +x /app/docker-entrypoint.sh
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+RUN cp /app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
