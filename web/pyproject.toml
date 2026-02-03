@@ -1,0 +1,20 @@
+[project]
+name = "web"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=6.0.2",
+    "htpy>=25.12.0",
+]
+
+[tool.htpy-uikit]
+components_dir = "components/ui"
+theme_path = "staticfiles/css/theme.css"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "ruff>=0.15.0",
+]
