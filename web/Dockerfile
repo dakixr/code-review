@@ -10,6 +10,8 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm run build:css
 
+FROM ghcr.io/anomalyco/opencode:1.1.49 AS opencode
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -21,7 +23,6 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv
@@ -37,10 +38,10 @@ COPY --from=css-builder /app/staticfiles/css/output.css /app/staticfiles/css/out
 # because it contains `@import "tailwindcss";` which Django interprets as a static reference.
 RUN rm -f /app/staticfiles/css/input.css
 
-RUN curl -fsSL https://opencode.ai/install | bash
+COPY --from=opencode /usr/local/bin/opencode /usr/local/bin/opencode
 RUN mkdir -p /root/.config/opencode && cp /app/opencode.json /root/.config/opencode/opencode.json
 
-ENV PATH="/root/.local/bin:/opt/venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:$PATH"
 
 RUN cp /app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
