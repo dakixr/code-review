@@ -13,9 +13,7 @@ border-border) that map to CSS variables defined in tailwind-themes/theme.css.
 # ============================================================================
 
 # Focus ring pattern used across interactive components
-FOCUS_RING_CLASSES = (
-    "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
-)
+FOCUS_RING_CLASSES = "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
 
 # Invalid/error state pattern
 ARIA_INVALID_CLASSES = (
@@ -27,7 +25,9 @@ ARIA_INVALID_CLASSES = (
 DISABLED_STATE_CLASSES = "disabled:cursor-not-allowed disabled:opacity-50"
 
 # Composite: All interactive state patterns combined (focus, invalid, disabled)
-INTERACTIVE_STATE_CLASSES = f"{FOCUS_RING_CLASSES} {ARIA_INVALID_CLASSES} {DISABLED_STATE_CLASSES}"
+INTERACTIVE_STATE_CLASSES = (
+    f"{FOCUS_RING_CLASSES} {ARIA_INVALID_CLASSES} {DISABLED_STATE_CLASSES}"
+)
 
 # Hover accent pattern (used for interactive elements like buttons, menu items)
 HOVER_ACCENT_CLASSES = "hover:bg-accent hover:text-accent-foreground"
@@ -64,7 +64,9 @@ BTN_ICON_SM_CLASSES = "p-0 size-8 min-w-8"
 BTN_ICON_LG_CLASSES = "p-0 size-10 min-w-10"
 
 # Button variant classes
-BTN_VARIANT_PRIMARY_CLASSES = "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90"
+BTN_VARIANT_PRIMARY_CLASSES = (
+    "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90"
+)
 
 BTN_VARIANT_SECONDARY_CLASSES = (
     "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80"
@@ -81,7 +83,9 @@ BTN_VARIANT_OUTLINE_CLASSES = (
     "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
 )
 
-BTN_VARIANT_GHOST_CLASSES = "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
+BTN_VARIANT_GHOST_CLASSES = (
+    "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
+)
 
 BTN_VARIANT_LINK_CLASSES = "text-primary underline-offset-4 hover:underline"
 
@@ -121,7 +125,9 @@ SELECT_NATIVE_BASE_CLASSES = (
 
 # Surface tokens for card and popover-like components
 SURFACE_CARD_CLASSES = "bg-card text-card-foreground border border-border shadow-sm"
-SURFACE_POPOVER_CLASSES = "bg-popover text-popover-foreground border border-border shadow-md"
+SURFACE_POPOVER_CLASSES = (
+    "bg-popover text-popover-foreground border border-border shadow-md"
+)
 
 # ============================================================================
 # Popover/Dropdown styles
@@ -184,9 +190,7 @@ BADGE_VARIANT_PRIMARY_CLASSES = (
     "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90"
 )
 
-BADGE_VARIANT_SECONDARY_CLASSES = (
-    "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90"
-)
+BADGE_VARIANT_SECONDARY_CLASSES = "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90"
 
 BADGE_VARIANT_DESTRUCTIVE_CLASSES = (
     "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 "

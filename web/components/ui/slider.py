@@ -152,7 +152,9 @@ def slider(
         expr = (
             "(String(val).endsWith('%') ? Math.round(parseFloat(val)/100*({max}-{min})+{min}) : val)"
         ).format(min=min, max=max)
-        container_children.append(span(class_="text-sm text-muted-foreground", **{"x-text": expr}))
+        container_children.append(
+            span(class_="text-sm text-muted-foreground", **{"x-text": expr})
+        )
 
     elements.append(div(**container_attrs)[*container_children])
 

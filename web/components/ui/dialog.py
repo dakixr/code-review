@@ -73,7 +73,9 @@ def dialog(
             ],
             # Dialog header
             div(class_="flex flex-col space-y-1.5 text-center sm:text-left")[
-                h2(class_="text-lg font-semibold leading-none tracking-tight")[title or ""],
+                h2(class_="text-lg font-semibold leading-none tracking-tight")[
+                    title or ""
+                ],
                 p(class_="text-sm text-muted-foreground")[description or ""],
             ],
         ],
@@ -94,7 +96,9 @@ def dialog_content(children: Node, **kwargs) -> Renderable:
     return dialog(children=children, **kwargs)
 
 
-def dialog_header(children: Node, *, class_: Optional[str] = None, **attrs) -> Renderable:
+def dialog_header(
+    children: Node, *, class_: Optional[str] = None, **attrs
+) -> Renderable:
     """Render a header section for dialog content.
 
     Args:
@@ -111,7 +115,9 @@ def dialog_header(children: Node, *, class_: Optional[str] = None, **attrs) -> R
     return div(**attrs)[children]
 
 
-def dialog_title(children: Node, *, class_: Optional[str] = None, **attrs) -> Renderable:
+def dialog_title(
+    children: Node, *, class_: Optional[str] = None, **attrs
+) -> Renderable:
     """Render a styled dialog title element.
 
     Args:
@@ -128,7 +134,9 @@ def dialog_title(children: Node, *, class_: Optional[str] = None, **attrs) -> Re
     return h2(**attrs)[children]
 
 
-def dialog_description(children: Node, *, class_: Optional[str] = None, **attrs) -> Renderable:
+def dialog_description(
+    children: Node, *, class_: Optional[str] = None, **attrs
+) -> Renderable:
     """Render supporting description text for a dialog.
 
     Args:
@@ -145,7 +153,9 @@ def dialog_description(children: Node, *, class_: Optional[str] = None, **attrs)
     return p(**attrs)[children]
 
 
-def dialog_footer(children: Node, *, class_: Optional[str] = None, **attrs) -> Renderable:
+def dialog_footer(
+    children: Node, *, class_: Optional[str] = None, **attrs
+) -> Renderable:
     """Render the dialog footer layout.
 
     Args:
@@ -183,7 +193,9 @@ def dialog_close_button(*, class_: Optional[str] = None, **attrs) -> Renderable:
     return button(**attrs)["Close"]
 
 
-def dialog_action_button(children: Node, *, class_: Optional[str] = None, **attrs) -> Renderable:
+def dialog_action_button(
+    children: Node, *, class_: Optional[str] = None, **attrs
+) -> Renderable:
     """Render the primary dialog action button.
 
     Args:

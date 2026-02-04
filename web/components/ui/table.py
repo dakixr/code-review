@@ -123,6 +123,8 @@ def table_with_actions(
     """
     if actions:
         headers = headers + ["Actions"]
-        rows = [row + [actions[i] if i < len(actions) else []] for i, row in enumerate(rows)]
+        rows = [
+            row + [actions[i] if i < len(actions) else []] for i, row in enumerate(rows)
+        ]
 
     return table_component(headers=headers, rows=rows, **kwargs)

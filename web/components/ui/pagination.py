@@ -23,9 +23,7 @@ base_classes_btn = (
     "cursor-pointer rounded-md"
 )
 variant_ghost = "hover:bg-accent hover:text-accent-foreground"
-variant_outline = (
-    "border bg-background shadow-xs border-input hover:bg-accent hover:text-accent-foreground"
-)
+variant_outline = "border bg-background shadow-xs border-input hover:bg-accent hover:text-accent-foreground"
 size_text = {
     "sm": "gap-1.5 h-8 px-3 has-[>svg]:px-2.5 text-xs",
     "md": "gap-2 h-9 px-4 py-2 has-[>svg]:px-3 text-sm",
@@ -148,7 +146,9 @@ def pagination(
         )
         if start_page > 2:
             ellipsis_class = f"{size_icon[size]} flex items-center justify-center"
-            items.append(li()[div(class_=ellipsis_class)[icon_more(class_="size-4 shrink-0")]])
+            items.append(
+                li()[div(class_=ellipsis_class)[icon_more(class_="size-4 shrink-0")]]
+            )
 
     # Page number buttons
     for page in range(start_page, end_page + 1):
@@ -176,7 +176,9 @@ def pagination(
     if show_first_last and end_page < total_pages:
         if end_page < total_pages - 1:
             ellipsis_class = f"{size_icon[size]} flex items-center justify-center"
-            items.append(li()[div(class_=ellipsis_class)[icon_more(class_="size-4 shrink-0")]])
+            items.append(
+                li()[div(class_=ellipsis_class)[icon_more(class_="size-4 shrink-0")]]
+            )
         items.append(
             li()[
                 a(
@@ -272,7 +274,9 @@ def alpine_pagination(
 
     # Build class presets to exactly mirror backend pagination visuals
     prev_next_base = classes_btn("ghost", icon=False, size_key=size)
-    prev_next_disabled = f"{prev_next_base} opacity-50 cursor-not-allowed pointer-events-none"
+    prev_next_disabled = (
+        f"{prev_next_base} opacity-50 cursor-not-allowed pointer-events-none"
+    )
     page_current = classes_btn("outline", icon=True, size_key=size)
     page_other = classes_btn("ghost", icon=True, size_key=size)
     ellipsis_class = f"{ {'sm': 'size-8', 'md': 'size-9', 'lg': 'size-10'}[size] } flex items-center justify-center"
@@ -284,7 +288,9 @@ def alpine_pagination(
                 li[
                     a(
                         href="#",
-                        **{"@click.prevent": "!prevDisabled() && (prevPage(), $el.blur())"},
+                        **{
+                            "@click.prevent": "!prevDisabled() && (prevPage(), $el.blur())"
+                        },
                         **{
                             ":class": f"prevDisabled() ? '{prev_next_disabled}' : '{prev_next_base}'"
                         },
@@ -300,7 +306,9 @@ def alpine_pagination(
                 template(x_for="(page, index) in getPageNumbers()", key="index")[
                     li[
                         template(x_if="page === '...'")[
-                            div(class_=ellipsis_class)[icon_more(class_="size-4 shrink-0")]
+                            div(class_=ellipsis_class)[
+                                icon_more(class_="size-4 shrink-0")
+                            ]
                         ],
                         template(x_if="page !== '...'")[
                             a(
@@ -309,7 +317,9 @@ def alpine_pagination(
                                 **{
                                     ":class": f"currentPage === page ? '{page_current}' : '{page_other}'"
                                 },
-                                **{":aria-current": "currentPage === page ? 'page' : null"},
+                                **{
+                                    ":aria-current": "currentPage === page ? 'page' : null"
+                                },
                             )[span(x_text="page")]
                         ],
                     ]
@@ -318,7 +328,9 @@ def alpine_pagination(
                 li[
                     a(
                         href="#",
-                        **{"@click.prevent": "!nextDisabled() && (nextPage(), $el.blur())"},
+                        **{
+                            "@click.prevent": "!nextDisabled() && (nextPage(), $el.blur())"
+                        },
                         **{
                             ":class": f"nextDisabled() ? '{prev_next_disabled}' : '{prev_next_base}'"
                         },

@@ -88,7 +88,9 @@ def radio_group(
         if disabled:
             label_class += " opacity-50 pointer-events-none"
 
-        radio_element = label(class_=label_class)[input_(**radio_attrs), option["label"]]
+        radio_element = label(class_=label_class)[
+            input_(**radio_attrs), option["label"]
+        ]
 
         radio_elements.append(radio_element)
 
@@ -108,7 +110,9 @@ def radio_group(
 
     # Add error message if provided
     if error:
-        elements.append(div(class_="text-sm text-destructive", **{"role": "alert"})[error])
+        elements.append(
+            div(class_="text-sm text-destructive", **{"role": "alert"})[error]
+        )
 
     # Use fieldset if we have a group label, otherwise use div - following basecoat pattern
     if label_text:
@@ -234,7 +238,9 @@ def radio_group_cards(
                 div(class_="grid gap-1 font-normal")[
                     div(class_="font-medium")[option["title"]],
                     option["description"]
-                    and div(class_="text-muted-foreground leading-snug")[option["description"]],
+                    and div(class_="text-muted-foreground leading-snug")[
+                        option["description"]
+                    ],
                 ],
             ]
         )

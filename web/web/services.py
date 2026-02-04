@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from .models import (
     ChatMessage,
+    GithubApp,
     GithubInstallation,
     GithubRepository,
     GithubUser,
@@ -36,6 +37,7 @@ def upsert_user(payload: dict | None) -> GithubUser | None:
 def upsert_installation(payload: dict) -> GithubInstallation:
     account = payload.get("account") or {}
     return GithubInstallation.objects.update_or_create(
+        github_app=None,
         installation_id=payload["id"],
         defaults={
             "account_login": account.get("login", ""),
@@ -48,11 +50,31 @@ def upsert_installation(payload: dict) -> GithubInstallation:
     )[0]
 
 
-def upsert_repository(installation: GithubInstallation, repo_payload: dict) -> GithubRepository:
+def upsert_installation_for_app(
+    payload: dict, github_app: GithubApp
+) -> GithubInstallation:
+    account = payload.get("account") or {}
+    return GithubInstallation.objects.update_or_create(
+        github_app=github_app,
+        installation_id=payload["id"],
+        defaults={
+            "account_login": account.get("login", ""),
+            "account_type": account.get("type", ""),
+            "target_type": payload.get("target_type", ""),
+            "permissions": payload.get("permissions", {}),
+            "events": payload.get("events", []),
+            "is_active": payload.get("suspended_at") is None,
+        },
+    )[0]
+
+
+def upsert_repository(
+    installation: GithubInstallation, repo_payload: dict
+) -> GithubRepository:
     return GithubRepository.objects.update_or_create(
+        installation=installation,
         repo_id=repo_payload["id"],
         defaults={
-            "installation": installation,
             "full_name": repo_payload.get("full_name", ""),
             "html_url": repo_payload.get("html_url", ""),
             "private": repo_payload.get("private", False),
@@ -63,7 +85,9 @@ def upsert_repository(installation: GithubInstallation, repo_payload: dict) -> G
 
 
 def deactivate_repository(installation: GithubInstallation, repo_payload: dict) -> None:
-    GithubRepository.objects.filter(installation=installation, repo_id=repo_payload["id"]).update(is_active=False)
+    GithubRepository.objects.filter(
+        installation=installation, repo_id=repo_payload["id"]
+    ).update(is_active=False)
 
 
 def upsert_pull_request(repository: GithubRepository, payload: dict) -> PullRequest:

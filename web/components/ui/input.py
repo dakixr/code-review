@@ -111,7 +111,9 @@ def input_component(
 
     # Add helper or error message if provided
     if error:
-        elements.append(span(class_="text-sm text-destructive", **{"role": "alert"})[error])
+        elements.append(
+            span(class_="text-sm text-destructive", **{"role": "alert"})[error]
+        )
     elif description:
         elements.append(span(class_="text-muted-foreground text-sm")[description])
 

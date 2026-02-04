@@ -111,7 +111,9 @@ def accordion_single(
     Returns:
         Renderable: Section element wrapping the single accordion entry.
     """
-    items: list[AccordionItem] = [{"title": title, "content": content, "expanded": expanded}]
+    items: list[AccordionItem] = [
+        {"title": title, "content": content, "expanded": expanded}
+    ]
     return accordion(items, default_value=title if expanded else None, **kwargs)
 
 

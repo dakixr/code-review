@@ -56,7 +56,9 @@ def tabs(
         normalized.append((v, lbl or "", cnt or div[""]))
 
     # Determine active index after normalization
-    active_index = next((i for i, (val, _, _) in enumerate(normalized) if val == active_tab), 0)
+    active_index = next(
+        (i for i, (val, _, _) in enumerate(normalized) if val == active_tab), 0
+    )
 
     for index, (tab_value, tab_label, tab_content) in enumerate(normalized):
         tab_elements.append(
@@ -91,7 +93,9 @@ def tabs(
                     ":aria-selected": f"activeTab === {index}",
                     ":hidden": f"activeTab !== {index}",
                 },
-                class_=(f"mt-3 outline-none {CARD_BASE_CLASSES}" if background else "mt-3"),
+                class_=(
+                    f"mt-3 outline-none {CARD_BASE_CLASSES}" if background else "mt-3"
+                ),
             )[tab_content]
         )
 

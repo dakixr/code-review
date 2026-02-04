@@ -27,7 +27,9 @@ TAlign = Literal["start", "center", "end"]
 # =============================================================================
 
 # Button component types
-ButtonVariant = Literal["primary", "secondary", "destructive", "outline", "ghost", "link", "danger"]
+ButtonVariant = Literal[
+    "primary", "secondary", "destructive", "outline", "ghost", "link", "danger"
+]
 """Button style variants."""
 
 ButtonSize = Literal["sm", "md", "lg"]
@@ -41,7 +43,14 @@ BadgeVariant = Literal["primary", "secondary", "destructive", "outline"]
 """Badge style variants."""
 
 BadgeStatus = Literal[
-    "active", "inactive", "pending", "error", "success", "failed", "processing", "completed"
+    "active",
+    "inactive",
+    "pending",
+    "error",
+    "success",
+    "failed",
+    "processing",
+    "completed",
 ]
 """Badge status variants for different states."""
 

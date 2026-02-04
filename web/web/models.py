@@ -1,7 +1,42 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from django.conf import settings
 from django.db import models
+
+
+class GithubApp(models.Model):
+    STATUS_DRAFT = "draft"
+    STATUS_READY = "ready"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_READY, "Ready"),
+    ]
+
+    uuid = models.UUIDField(default=uuid4, unique=True, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="github_apps",
+    )
+    desired_name = models.CharField[str, str](max_length=255)
+    status = models.CharField[str, str](
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_DRAFT
+    )
+
+    app_id = models.BigIntegerField[int, int](null=True, blank=True)
+    slug = models.CharField[str, str](max_length=255, blank=True)
+    client_id = models.CharField[str, str](max_length=255, blank=True)
+    client_secret = models.CharField[str, str](max_length=255, blank=True)
+    webhook_secret = models.CharField[str, str](max_length=255, blank=True)
+    private_key_pem = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.slug or self.desired_name
 
 
 class GithubUser(models.Model):
@@ -17,7 +52,14 @@ class GithubUser(models.Model):
 
 
 class GithubInstallation(models.Model):
-    installation_id = models.BigIntegerField[int, int](unique=True)
+    github_app = models.ForeignKey["GithubApp", "GithubApp"](
+        GithubApp,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="installations",
+    )
+    installation_id = models.BigIntegerField[int, int]()
     account_login = models.CharField[str, str](max_length=255)
     account_type = models.CharField[str, str](max_length=32)
     target_type = models.CharField[str, str](max_length=32)
@@ -34,6 +76,14 @@ class GithubInstallation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["github_app", "installation_id"],
+                name="github_installation_per_app",
+            )
+        ]
+
     def __str__(self) -> str:
         return f"{self.account_login} ({self.installation_id})"
 
@@ -42,12 +92,20 @@ class GithubRepository(models.Model):
     installation = models.ForeignKey["GithubInstallation", "GithubInstallation"](
         GithubInstallation, on_delete=models.CASCADE, related_name="repositories"
     )
-    full_name = models.CharField[str, str](max_length=255, unique=True)
-    repo_id = models.BigIntegerField[int, int](unique=True)
+    full_name = models.CharField[str, str](max_length=255)
+    repo_id = models.BigIntegerField[int, int]()
     html_url = models.URLField[str, str](blank=True)
     private = models.BooleanField[bool, bool](default=False)
     default_branch = models.CharField[str, str](max_length=255, default="main")
     is_active = models.BooleanField[bool, bool](default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["installation", "repo_id"],
+                name="github_repo_per_installation",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.full_name
@@ -144,7 +202,9 @@ class ReviewRun(models.Model):
         PullRequest, on_delete=models.CASCADE, related_name="review_runs"
     )
     head_sha = models.CharField[str, str](max_length=64)
-    status = models.CharField[str, str](max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    status = models.CharField[str, str](
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED
+    )
     summary = models.TextField(blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -201,9 +261,39 @@ class AppSetting(models.Model):
 
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile"
+    )
     github_login = models.CharField[str, str](max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return self.user.username
+
+
+class UserApiKey(models.Model):
+    PROVIDER_ZAI = "zai"
+    PROVIDER_CHOICES = [
+        (PROVIDER_ZAI, "ZAI / GLM"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="api_keys",
+    )
+    provider = models.CharField[str, str](max_length=32, choices=PROVIDER_CHOICES)
+    api_key = models.TextField()
+    is_active = models.BooleanField[bool, bool](default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "provider"], name="api_key_per_user_provider"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.provider}"

@@ -48,7 +48,9 @@ def textarea_component(
 
     # Use shared input base classes (textarea shares same styling as input)
     # Adjust height and padding for multi-line input
-    base_classes = INPUT_BASE_CLASSES.replace("h-9", "min-h-[60px]").replace("py-1", "py-2")
+    base_classes = INPUT_BASE_CLASSES.replace("h-9", "min-h-[60px]").replace(
+        "py-1", "py-2"
+    )
 
     # Build class list
     classes = [base_classes]
@@ -110,7 +112,9 @@ def textarea_component(
 
     # Add error message if provided
     if error:
-        elements.append(span(class_="text-sm text-destructive", **{"role": "alert"})[error])
+        elements.append(
+            span(class_="text-sm text-destructive", **{"role": "alert"})[error]
+        )
 
     # Return single element or fragment
     if len(elements) == 1:

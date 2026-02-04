@@ -101,7 +101,9 @@ def native_select(
     # Add placeholder option if provided
     if placeholder and not multiple:
         option_elements.append(
-            option(value="", disabled="true", selected="" if value is None else None)[placeholder]
+            option(value="", disabled="true", selected="" if value is None else None)[
+                placeholder
+            ]
         )
 
     # Add actual options
@@ -132,7 +134,9 @@ def native_select(
 
     # Add error message if provided
     if error:
-        elements.append(span(class_="text-sm text-destructive", **{"role": "alert"})[error])
+        elements.append(
+            span(class_="text-sm text-destructive", **{"role": "alert"})[error]
+        )
 
     # Return single element or fragment
     if len(elements) == 1:
@@ -272,7 +276,9 @@ def select_component(
                 ]
             )
         else:
-            children.append(span(class_="select-content flex-1 truncate")[item.get("label", "")])
+            children.append(
+                span(class_="select-content flex-1 truncate")[item.get("label", "")]
+            )
         # trailing check positioned to the far right inside the option
         children.append(
             span(class_="select-check absolute right-2.5 top-1/2 -translate-y-1/2")[
@@ -377,7 +383,9 @@ def select_component(
 
     # Alpine
 
-    initial_value_js = initial_value.replace("'", "\\'") if isinstance(initial_value, str) else ""
+    initial_value_js = (
+        initial_value.replace("'", "\\'") if isinstance(initial_value, str) else ""
+    )
 
     alpine_data: js = f"""{{
         state: {{
@@ -587,7 +595,9 @@ def select_component(
     if disabled:
         container_classes = f"{container_classes} cursor-not-allowed"
 
-    return div(id=base_id, class_=container_classes, **root_attrs)[hidden_input, trigger, popover]
+    return div(id=base_id, class_=container_classes, **root_attrs)[
+        hidden_input, trigger, popover
+    ]
 
 
 def multiselect_component(
@@ -703,7 +713,9 @@ def multiselect_component(
                 ]
             )
         else:
-            children.append(span(class_="select-content flex-1 truncate")[item.get("label", "")])
+            children.append(
+                span(class_="select-content flex-1 truncate")[item.get("label", "")]
+            )
         children.append(
             span(class_="select-check absolute right-2.5 top-1/2 -translate-y-1/2")[
                 icon_check(class_="size-4 opacity-50", **{"style": "display: none;"})
@@ -798,7 +810,9 @@ def multiselect_component(
     def _escape_js(s: str) -> str:
         return s.replace("'", "\\'")
 
-    initial_values_js = "[" + ",".join(f"'{_escape_js(v)}'" for v in initial_values) + "]"
+    initial_values_js = (
+        "[" + ",".join(f"'{_escape_js(v)}'" for v in initial_values) + "]"
+    )
     input_name_js = (name or f"{base_id}-values").replace("'", "\\'")
 
     alpine_data: js = f"""{{
