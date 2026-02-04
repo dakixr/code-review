@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
+from typing import cast
 
+from celery.app.task import Task
 from django.utils import timezone
 
 from .models import (
@@ -13,10 +16,10 @@ from .models import (
     PullRequest,
     ReviewRun,
 )
-from celery.app.task import Task
-from typing import cast
 
 from .tasks import handle_chat_response, run_pr_review
+
+logger = logging.getLogger(__name__)
 
 
 def upsert_user(payload: dict | None) -> GithubUser | None:
@@ -122,6 +125,13 @@ def queue_review(pull_request: PullRequest, head_sha: str) -> ReviewRun:
         status=ReviewRun.STATUS_QUEUED,
     )
     cast(Task, run_pr_review).delay(review_run.id)
+    logger.info(
+        "review.queued review_run_id=%s repo=%s pr=%s sha=%s",
+        review_run.id,
+        pull_request.repository.full_name,
+        pull_request.pr_number,
+        head_sha,
+    )
     return review_run
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 from typing import Iterable, cast
 from uuid import UUID
@@ -74,6 +75,8 @@ from .services import (
 
 PAGE_SHELL_CLASS = "min-h-screen bg-background text-foreground"
 CONTENT_CLASS = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+
+logger = logging.getLogger(__name__)
 
 
 def render_htpy(content: Renderable) -> HttpResponse:
@@ -818,16 +821,40 @@ def _github_webhook_impl(
     signature = request.headers.get("X-Hub-Signature-256", "")
     secret = github_app.webhook_secret if github_app else settings.GITHUB_WEBHOOK_SECRET
     if not verify_webhook_signature(request.body, signature, secret):
+        logger.warning(
+            "github_webhook.invalid_signature delivery=%s event=%s app_uuid=%s",
+            request.headers.get("X-GitHub-Delivery", ""),
+            request.headers.get("X-GitHub-Event", ""),
+            str(getattr(github_app, "uuid", "")),
+        )
         return JsonResponse({"error": "invalid signature"}, status=400)
 
     event = request.headers.get("X-GitHub-Event", "")
     payload = parse_webhook_body(request.body)
+    installation_id = payload.get("installation", {}).get("id")
+    repo_full_name = payload.get("repository", {}).get("full_name")
+    action = payload.get("action")
+    logger.info(
+        "github_webhook.received delivery=%s event=%s action=%s app_uuid=%s installation_id=%s repo=%s",
+        request.headers.get("X-GitHub-Delivery", ""),
+        event,
+        action,
+        str(getattr(github_app, "uuid", "")),
+        installation_id,
+        repo_full_name,
+    )
 
     if event == "installation":
         installation = (
             upsert_installation_for_app(payload["installation"], github_app)
             if github_app
             else upsert_installation(payload["installation"])
+        )
+        logger.info(
+            "github_webhook.installation_upserted app_uuid=%s installation_id=%s account=%s",
+            str(getattr(github_app, "uuid", "")),
+            installation.installation_id,
+            installation.account_login,
         )
         return JsonResponse(
             {"status": "ok", "installation": installation.installation_id}
@@ -843,6 +870,13 @@ def _github_webhook_impl(
             upsert_repository(installation, repo)
         for repo in payload.get("repositories_removed", []):
             deactivate_repository(installation, repo)
+        logger.info(
+            "github_webhook.installation_repositories app_uuid=%s installation_id=%s added=%s removed=%s",
+            str(getattr(github_app, "uuid", "")),
+            installation.installation_id,
+            len(payload.get("repositories_added", [])),
+            len(payload.get("repositories_removed", [])),
+        )
         return JsonResponse({"status": "ok"})
 
     if event == "pull_request":
@@ -857,6 +891,14 @@ def _github_webhook_impl(
             pull_request = upsert_pull_request(repo, payload["pull_request"])
             head_sha = payload["pull_request"]["head"]["sha"]
             queue_review(pull_request, head_sha)
+            logger.info(
+                "github_webhook.review_queued app_uuid=%s installation_id=%s repo=%s pr=%s sha=%s",
+                str(getattr(github_app, "uuid", "")),
+                installation.installation_id,
+                repo.full_name,
+                pull_request.pr_number,
+                head_sha,
+            )
         return JsonResponse({"status": "ok"})
 
     if event == "issue_comment":

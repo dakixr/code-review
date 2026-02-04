@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -11,12 +12,15 @@ from .models import RuleSet, UserApiKey
 from .models import PullRequest, ReviewComment, ReviewRun
 from .opencode_client import run_opencode
 
+logger = logging.getLogger(__name__)
+
 
 @shared_task
 def run_pr_review(review_run_id: int) -> None:
     review_run = ReviewRun.objects.select_related(
         "pull_request__repository__installation__github_app__owner"
     ).get(id=review_run_id)
+    logger.info("review.start review_run_id=%s", review_run_id)
     review_run.status = ReviewRun.STATUS_RUNNING
     review_run.started_at = timezone.now()
     review_run.save(update_fields=["status", "started_at"])
@@ -33,6 +37,13 @@ def run_pr_review(review_run_id: int) -> None:
         repo_full_name=repository.full_name,
         issue_number=pull_request.pr_number,
         body=placeholder_body,
+    )
+    logger.info(
+        "review.placeholder_posted review_run_id=%s comment_id=%s repo=%s pr=%s",
+        review_run_id,
+        placeholder_comment_id,
+        repository.full_name,
+        pull_request.pr_number,
     )
 
     review_comment = ReviewComment.objects.create(
@@ -67,6 +78,11 @@ def run_pr_review(review_run_id: int) -> None:
             auth=auth,
             repo_full_name=repository.full_name,
             pull_number=pull_request.pr_number,
+        )
+        logger.info(
+            "review.diff_fetched review_run_id=%s chars=%s",
+            review_run_id,
+            len(diff_text),
         )
 
         max_diff_chars = 160_000
@@ -124,6 +140,7 @@ def run_pr_review(review_run_id: int) -> None:
                 files=[diff_path],
                 env={"ZAI_API_KEY": api_key},
             )
+        logger.info("review.opencode_done review_run_id=%s", review_run_id)
 
         summary = result.text.strip()
         github.update_issue_comment(
@@ -133,6 +150,7 @@ def run_pr_review(review_run_id: int) -> None:
             comment_id=placeholder_comment_id,
             body=summary,
         )
+        logger.info("review.posted review_run_id=%s", review_run_id)
 
         review_comment.body = summary
         review_comment.save(update_fields=["body"])
@@ -143,6 +161,9 @@ def run_pr_review(review_run_id: int) -> None:
         review_run.save(update_fields=["status", "finished_at", "summary"])
     except Exception as e:
         error_text = str(e).strip() or "Unknown error"
+        logger.exception(
+            "review.failed review_run_id=%s error=%s", review_run_id, error_text
+        )
         body = (
             "❌ Review failed.\n\n"
             f"Error: `{error_text}`\n\n"
