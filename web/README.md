@@ -7,8 +7,8 @@ Run commands from the `web/` directory.
 1. Install deps with `uv`.
 2. Install CSS deps with `pnpm install`.
 3. Copy `.env.example` to `.env` and fill GitHub App settings.
-4. Start the stack (Redis + web + worker):
-   - `docker compose up -d --build`
+4. Start the local stack (Redis + web + worker + Tailwind watcher):
+   - `docker compose -f docker-compose.local.yml up -d --build`
 5. Apply migrations:
    - `uv run python manage.py migrate`
 6. Build Tailwind locally (optional if not using Docker):

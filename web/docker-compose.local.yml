@@ -1,24 +1,28 @@
+# Local development compose (bind mounts + hot reload + Tailwind watcher)
 services:
   redis:
     image: redis:7.4-alpine
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
+
   web:
     build:
       context: .
-    command: /opt/venv/bin/python manage.py runserver 0.0.0.0:7999 --noreload --skip-checks
+    command: /opt/venv/bin/python manage.py runserver 0.0.0.0:7999
     env_file:
       - ./.env
     environment:
       RUN_DJANGO_COMMANDS: "true"
       UV_PROJECT_ENVIRONMENT: /opt/venv
       UV_LINK_MODE: copy
+    volumes:
+      - .:/app
+      - /app/.venv
     ports:
       - "7999:7999"
     depends_on:
       - redis
+
   worker:
     build:
       context: .
@@ -28,8 +32,18 @@ services:
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/venv
       UV_LINK_MODE: copy
+    volumes:
+      - .:/app
+      - /app/.venv
     depends_on:
       - redis
 
-volumes:
-  redis_data:
+  tailwind:
+    image: node:20-slim
+    working_dir: /app
+    command: sh -c "npm install -g pnpm && pnpm install && pnpm run dev:css"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - web
