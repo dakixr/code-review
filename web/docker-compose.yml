@@ -17,6 +17,8 @@ services:
       UV_LINK_MODE: copy
     ports:
       - "7999:7999"
+    volumes:
+      - db_data:/data
     depends_on:
       - redis
   worker:
@@ -28,8 +30,11 @@ services:
     environment:
       UV_PROJECT_ENVIRONMENT: /opt/venv
       UV_LINK_MODE: copy
+    volumes:
+      - db_data:/data
     depends_on:
       - redis
 
 volumes:
   redis_data:
+  db_data:

@@ -39,6 +39,8 @@ Run commands from the `web/` directory.
 ## Production Notes (Coolify)
 
 - Run `migrate` + `collectstatic` at startup by setting `RUN_DJANGO_COMMANDS=true`.
+- **Persist the SQLite database** by mounting a persistent volume at `/data` and setting:
+  - `DJANGO_DB_PATH=/data/db.sqlite3`
 - Required env:
   - `DJANGO_SECRET_KEY`
   - `DJANGO_DEBUG=false`

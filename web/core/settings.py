@@ -97,10 +97,13 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+DEFAULT_DB_PATH = "/data/db.sqlite3" if not DEBUG else str(BASE_DIR / "db.sqlite3")
+DB_PATH = os.getenv("DJANGO_DB_PATH", DEFAULT_DB_PATH)
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": DB_PATH,
     }
 }
 

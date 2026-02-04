@@ -32,6 +32,8 @@ RUN uv sync --frozen
 
 COPY . .
 
+RUN mkdir -p /data
+
 COPY --from=css-builder /app/staticfiles/css/output.css /app/staticfiles/css/output.css
 # Tailwind source stylesheet is only needed in the builder stage.
 # Keeping it in the runtime image breaks collectstatic with Manifest storage
