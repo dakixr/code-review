@@ -119,6 +119,13 @@ class RuleSet(models.Model):
         (SCOPE_REPO, "Repository"),
     ]
 
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="rule_sets",
+    )
     name = models.CharField[str, str](max_length=255)
     scope = models.CharField[str, str](max_length=16, choices=SCOPE_CHOICES)
     repository = models.ForeignKey["GithubRepository", "GithubRepository"](

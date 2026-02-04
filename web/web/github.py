@@ -194,3 +194,37 @@ def fetch_pull_request_diff(
         response = client.get(url, headers=headers)
         response.raise_for_status()
         return response.text
+
+
+def list_installation_repositories(
+    *,
+    installation_id: int,
+    auth: GithubAppAuth,
+) -> list[dict]:
+    """List repositories accessible to an installation.
+
+    Uses the installation access token and `GET /installation/repositories`.
+    """
+    token = get_installation_token(installation_id, auth)
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    repos: list[dict] = []
+    page = 1
+    per_page = 100
+    with httpx.Client(timeout=40) as client:
+        while True:
+            url = f"https://api.github.com/installation/repositories?per_page={per_page}&page={page}"
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            batch = data.get("repositories", [])
+            if not isinstance(batch, list) or not batch:
+                break
+            repos.extend([repo for repo in batch if isinstance(repo, dict)])
+            if len(batch) < per_page:
+                break
+            page += 1
+    return repos

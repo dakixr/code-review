@@ -41,8 +41,10 @@ from htpy import (
     link,
     main,
     meta,
+    option,
     p,
     script,
+    select,
     span,
     strong,
     title,
@@ -750,8 +752,22 @@ def github_app_install(request: HttpRequest) -> HttpResponse:
 
 
 def rules(request: HttpRequest) -> HttpResponse:
-    rule_sets = RuleSet.objects.prefetch_related("rules", "repository").all()
-    repositories = GithubRepository.objects.filter(is_active=True).all()
+    if not request.user.is_authenticated:
+        return redirect("/account")
+
+    rule_sets = (
+        RuleSet.objects.prefetch_related("rules", "repository")
+        .filter(owner=request.user)
+        .all()
+    )
+    repositories = (
+        GithubRepository.objects.filter(
+            is_active=True,
+            installation__github_app__owner=request.user,
+        )
+        .order_by("full_name")
+        .all()
+    )
 
     content = div(class_="space-y-8")[
         section_header(
@@ -771,12 +787,18 @@ def rules(request: HttpRequest) -> HttpResponse:
 def create_rule_set(request: HttpRequest) -> HttpResponse:
     if request.method != "POST":
         return redirect("/rules")
+    if not request.user.is_authenticated:
+        return redirect("/account")
     name = request.POST.get("name", "New Rules")
     scope = request.POST.get("scope", RuleSet.SCOPE_GLOBAL)
     repo_id = request.POST.get("repository_id")
     instructions = request.POST.get("instructions", "")
     repository_id = int(repo_id) if repo_id else None
+    if scope == RuleSet.SCOPE_REPO and not repository_id:
+        messages.error(request, "Select a repository for repo-scoped rules.")
+        return redirect("/rules")
     RuleSet.objects.create(
+        owner=request.user,
         name=name,
         scope=scope,
         repository_id=repository_id,
@@ -788,11 +810,16 @@ def create_rule_set(request: HttpRequest) -> HttpResponse:
 def add_rule(request: HttpRequest, rule_set_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("/rules")
+    if not request.user.is_authenticated:
+        return redirect("/account")
     title = request.POST.get("title", "New rule")
     description = request.POST.get("description", "")
     severity = request.POST.get("severity", "info")
+    rule_set = RuleSet.objects.filter(id=rule_set_id, owner=request.user).first()
+    if not rule_set:
+        raise Http404
     Rule.objects.create(
-        rule_set_id=rule_set_id,
+        rule_set=rule_set,
         title=title,
         description=description,
         severity=severity,
@@ -856,6 +883,34 @@ def _github_webhook_impl(
             installation.installation_id,
             installation.account_login,
         )
+        try:
+            auth = github.auth_for_installation(installation)
+            repos = github.list_installation_repositories(
+                installation_id=installation.installation_id,
+                auth=auth,
+            )
+            synced_repo_ids: set[int] = set()
+            for repo in repos:
+                upsert_repository(installation, repo)
+                repo_id = repo.get("id")
+                if isinstance(repo_id, int):
+                    synced_repo_ids.add(repo_id)
+            if synced_repo_ids:
+                GithubRepository.objects.filter(installation=installation).exclude(
+                    repo_id__in=synced_repo_ids
+                ).update(is_active=False)
+            logger.info(
+                "github_webhook.installation_repo_sync app_uuid=%s installation_id=%s repos=%s",
+                str(getattr(github_app, "uuid", "")),
+                installation.installation_id,
+                len(synced_repo_ids),
+            )
+        except Exception:
+            logger.exception(
+                "github_webhook.installation_repo_sync_failed app_uuid=%s installation_id=%s",
+                str(getattr(github_app, "uuid", "")),
+                installation.installation_id,
+            )
         return JsonResponse(
             {"status": "ok", "installation": installation.installation_id}
         )
@@ -946,55 +1001,72 @@ def _try_record_feedback(pull_request: PullRequest, body_text: str) -> None:
 def _rule_set_form(
     request: HttpRequest, repositories: Iterable[GithubRepository]
 ) -> Renderable:
-    repo_options = [
-        label_with_radio(repo.full_name, value=str(repo.id)) for repo in repositories
-    ]
-    repo_block: Renderable = (
-        div(class_="grid gap-2")[*repo_options]
-        if repo_options
-        else p(class_="text-sm text-muted-foreground")[
-            "Install a repo to enable repo rules."
+    repo_list = list(repositories)
+    if repo_list:
+        repo_block: Renderable = select(
+            name="repository_id",
+            class_="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
+        )[
+            option(value="")["Select a repository…"],
+            *[option(value=str(repo.id))[repo.full_name] for repo in repo_list],
         ]
-    )
+    else:
+        repo_block = p(class_="text-sm text-muted-foreground")[
+            "No repositories found yet. Install the GitHub App on repos (or open a PR) to populate the list."
+        ]
 
     return card(
         title="Create Rule Set", description="Define global or repo-specific rules."
     )[
-        form_component(action="/rules/create", method="post")[
-            csrf_input(request),
-            form_field[
-                input_component(
-                    name="name",
-                    label_text="Name",
-                    placeholder="API Review Rules",
-                )
-            ],
-            form_field[
-                div(class_="grid gap-2")[
-                    span(class_="text-sm font-medium")["Scope"],
-                    div(class_="flex flex-wrap gap-4")[
-                        label_with_radio(
-                            "Global", name="scope", value="global", checked=True
-                        ),
-                        label_with_radio("Repository", name="scope", value="repo"),
-                    ],
-                ]
-            ],
-            form_field[
-                div(class_="grid gap-2")[
-                    span(class_="text-sm font-medium")["Repository (optional)"],
-                    repo_block,
-                ]
-            ],
-            form_field[
-                textarea_component(
-                    name="instructions",
-                    label_text="Instructions",
-                    placeholder="Keep reviews crisp, prefer diff-only comments.",
-                    rows=4,
-                )
-            ],
-            button_component(type="submit")[["Create"]],
+        div(x_data="{ scope: 'global' }")[
+            form_component(action="/rules/create", method="post")[
+                csrf_input(request),
+                form_field[
+                    input_component(
+                        name="name",
+                        label_text="Name",
+                        placeholder="API Review Rules",
+                    )
+                ],
+                form_field[
+                    div(class_="grid gap-2")[
+                        span(class_="text-sm font-medium")["Scope"],
+                        div(class_="flex flex-wrap gap-4")[
+                            label_with_radio(
+                                "Global",
+                                name="scope",
+                                value="global",
+                                checked=True,
+                                x_model="scope",
+                            ),
+                            label_with_radio(
+                                "Repository",
+                                name="scope",
+                                value="repo",
+                                x_model="scope",
+                            ),
+                        ],
+                    ]
+                ],
+                form_field[
+                    div(
+                        class_="grid gap-2",
+                        x_show="scope === 'repo'",
+                    )[
+                        span(class_="text-sm font-medium")["Repository"],
+                        repo_block,
+                    ]
+                ],
+                form_field[
+                    textarea_component(
+                        name="instructions",
+                        label_text="Instructions",
+                        placeholder="Keep reviews crisp, prefer diff-only comments.",
+                        rows=4,
+                    )
+                ],
+                button_component(type="submit")[["Create"]],
+            ]
         ]
     ]
 
@@ -1115,8 +1187,12 @@ def label_with_radio(
     name: str = "repository_id",
     value: str,
     checked: bool = False,
+    x_model: str | None = None,
 ) -> Renderable:
+    attrs: dict[str, str] = {}
+    if x_model:
+        attrs["x-model"] = x_model
     return label(class_="inline-flex items-center gap-2 text-sm text-muted-foreground")[
-        input_el(type="radio", name=name, value=value, checked=checked),
+        input_el(type="radio", name=name, value=value, checked=checked, **attrs),
         span[label_text],
     ]

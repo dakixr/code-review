@@ -94,10 +94,12 @@ def run_pr_review(review_run_id: int) -> None:
             diff_text = diff_text[:max_diff_chars]
 
         global_rule_sets = RuleSet.objects.prefetch_related("rules").filter(
+            owner=owner,
             scope=RuleSet.SCOPE_GLOBAL,
             is_active=True,
         )
         repo_rule_sets = RuleSet.objects.prefetch_related("rules").filter(
+            owner=owner,
             scope=RuleSet.SCOPE_REPO,
             repository=repository,
             is_active=True,
