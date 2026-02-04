@@ -574,8 +574,6 @@ def github_app_setup(request: HttpRequest, app_uuid: UUID) -> HttpResponse:
             "issues": "write",
         },
         "default_events": [
-            "installation",
-            "installation_repositories",
             "pull_request",
             "issue_comment",
         ],
