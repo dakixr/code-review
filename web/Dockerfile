@@ -32,6 +32,10 @@ RUN uv sync --frozen
 COPY . .
 
 COPY --from=css-builder /app/staticfiles/css/output.css /app/staticfiles/css/output.css
+# Tailwind source stylesheet is only needed in the builder stage.
+# Keeping it in the runtime image breaks collectstatic with Manifest storage
+# because it contains `@import "tailwindcss";` which Django interprets as a static reference.
+RUN rm -f /app/staticfiles/css/input.css
 
 RUN curl -fsSL https://opencode.ai/install | bash
 RUN mkdir -p /root/.config/opencode && cp /app/opencode.json /root/.config/opencode/opencode.json
