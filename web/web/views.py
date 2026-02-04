@@ -958,6 +958,17 @@ def _github_webhook_impl(
 
     if event == "issue_comment":
         if "pull_request" in payload.get("issue", {}):
+            sender = payload.get("sender") or {}
+            sender_type = str(sender.get("type", ""))
+            sender_login = str(sender.get("login", ""))
+            if sender_type.lower() == "bot" or sender_login.endswith("[bot]"):
+                logger.info(
+                    "github_webhook.ignore_bot_comment delivery=%s app_uuid=%s login=%s",
+                    request.headers.get("X-GitHub-Delivery", ""),
+                    str(getattr(github_app, "uuid", "")),
+                    sender_login,
+                )
+                return JsonResponse({"status": "ok"})
             installation_id = payload.get("installation", {}).get("id")
             repo_id = payload.get("repository", {}).get("id")
             pr_number = payload["issue"]["number"]
@@ -971,8 +982,17 @@ def _github_webhook_impl(
             pull_request = qs.first()
             if pull_request:
                 body_text = payload["comment"]["body"]
-                record_chat_message(pull_request, payload["comment"])
                 _try_record_feedback(pull_request, body_text)
+                normalized = body_text.strip().lower()
+                is_feedback = normalized.startswith(
+                    ("/ai like", "/ai dislike", "/ai ignore")
+                )
+                should_respond = normalized.startswith("/ai") and not is_feedback
+                record_chat_message(
+                    pull_request,
+                    payload["comment"],
+                    respond=should_respond,
+                )
         return JsonResponse({"status": "ok"})
 
     return JsonResponse({"status": "ignored"})

@@ -135,12 +135,15 @@ def queue_review(pull_request: PullRequest, head_sha: str) -> ReviewRun:
     return review_run
 
 
-def record_chat_message(pull_request: PullRequest, payload: dict) -> ChatMessage:
+def record_chat_message(
+    pull_request: PullRequest, payload: dict, *, respond: bool = True
+) -> ChatMessage:
     message = ChatMessage.objects.create(
         pull_request=pull_request,
         author=payload.get("user", {}).get("login", "unknown"),
         body=payload.get("body", ""),
         github_comment_id=payload.get("id"),
     )
-    cast(Task, handle_chat_response).delay(pull_request.id, message.body)
+    if respond:
+        cast(Task, handle_chat_response).delay(pull_request.id, message.body)
     return message

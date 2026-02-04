@@ -5,6 +5,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from shutil import which
 
 
 @dataclass(frozen=True)
@@ -25,21 +26,57 @@ def run_opencode(
     Raises:
         RuntimeError: If OpenCode fails or returns an error event.
     """
-    args = ["opencode", "run", "--format", "json"]
+    merged_env = os.environ.copy()
+    merged_env.update(env)
+
+    configured_bin = (
+        env.get("OPENCODE_BIN") or os.getenv("OPENCODE_BIN", "") or "opencode"
+    )
+    candidates = [configured_bin]
+    if configured_bin == "opencode":
+        candidates.extend(
+            [
+                "/usr/local/bin/opencode",
+                "/usr/bin/opencode",
+            ]
+        )
+
+    opencode_bin: str | None = None
+    for candidate in candidates:
+        if "/" in candidate:
+            if Path(candidate).exists():
+                opencode_bin = candidate
+                break
+            continue
+        resolved = which(candidate, path=merged_env.get("PATH"))
+        if resolved:
+            opencode_bin = resolved
+            break
+
+    if not opencode_bin:
+        raise RuntimeError(
+            "OpenCode binary not found. Set OPENCODE_BIN or ensure it is installed "
+            f"and on PATH. PATH={merged_env.get('PATH', '')!r}"
+        )
+
+    args = [opencode_bin, "run", "--format", "json"]
     for file_path in files or []:
         args.extend(["--file", str(file_path)])
     args.append(message)
 
-    merged_env = os.environ.copy()
-    merged_env.update(env)
-
-    proc = subprocess.run(
-        args,
-        env=merged_env,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        proc = subprocess.run(
+            args,
+            env=merged_env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "OpenCode executable could not be started. "
+            f"Tried {opencode_bin!r}. PATH={merged_env.get('PATH', '')!r}"
+        ) from e
 
     # OpenCode emits line-delimited JSON events on stdout in `--format json` mode.
     stdout = proc.stdout.strip()

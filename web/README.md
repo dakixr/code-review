@@ -23,6 +23,15 @@ This web app is the control plane:
 - OpenCode installed in the image with default model `zai/glm-4.7` (see `web/opencode.json`).
 - `pyjwt[crypto]` (Cryptography) for GitHub App JWT signing (RS256).
 
+## Troubleshooting
+
+### Review failed: `No such file or directory: 'opencode'`
+
+This means the worker container cannot find the OpenCode binary on `PATH`.
+
+- Ensure the worker uses the same image build as the web container (the provided `Dockerfile` copies `opencode` into `/usr/local/bin/opencode`).
+- If your platform overwrites `PATH`, set `OPENCODE_BIN=/usr/local/bin/opencode`.
+
 ## Local Setup
 
 Run commands from the `web/` directory.
