@@ -85,3 +85,5 @@ This project uses the **GitHub App Manifest** flow (Coolify-style):
 4. After GitHub creates the app, install it on an org/repo.
 
 API keys (e.g. `zai` for GLM) are stored **per user in the database** and will be injected into background review jobs as needed (not committed as env vars).
+
+Hi! hi again!

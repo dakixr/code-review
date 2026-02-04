@@ -987,7 +987,7 @@ def _github_webhook_impl(
                 is_feedback = normalized.startswith(
                     ("/ai like", "/ai dislike", "/ai ignore")
                 )
-                should_respond = normalized.startswith("/ai") and not is_feedback
+                should_respond = ("@codereview" in normalized) and not is_feedback
                 record_chat_message(
                     pull_request,
                     payload["comment"],
