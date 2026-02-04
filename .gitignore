@@ -1,3 +1,4 @@
 web/staticfiles/css/output.css
+web/static/
 web/node_modules/
 web/.pnpm-store/

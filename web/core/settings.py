@@ -132,16 +132,13 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles-build"
+STATIC_URL = "/static/"
+# collectstatic destination (served by WhiteNoise in prod)
+STATIC_ROOT = BASE_DIR / "static"
 
+# source asset dirs (Tailwind output + theme live here)
 STATICFILES_DIRS = [
-    path
-    for path in (
-        BASE_DIR / "static",
-        BASE_DIR / "staticfiles",
-    )
-    if path.exists()
+    BASE_DIR / "staticfiles",
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
