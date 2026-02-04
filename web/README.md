@@ -21,6 +21,7 @@ This web app is the control plane:
 - Redis as Celery broker.
 - WhiteNoise + `collectstatic` for production static serving.
 - OpenCode installed in the image with default model `zai/glm-4.7` (see `web/opencode.json`).
+- `pyjwt[crypto]` (Cryptography) for GitHub App JWT signing (RS256).
 
 ## Local Setup
 
