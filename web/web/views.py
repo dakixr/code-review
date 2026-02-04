@@ -156,6 +156,9 @@ def home(request: HttpRequest) -> HttpResponse:
         )["GitHub App"],
         span(
             class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground"
+        )["Multi-user"],
+        span(
+            class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground"
         )["HTMX + htpy"],
         span(
             class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground"
@@ -182,9 +185,15 @@ def home(request: HttpRequest) -> HttpResponse:
                     "Automated PR reviews that learn your taste"
                 ],
                 p(class_="text-lg text-muted-foreground")[
-                    "Connect your GitHub org, set global and repo-specific rules, and let the reviewer leave live comments with context."
+                    "Create your own GitHub App, install it on repos, and let the reviewer comment directly in PRs. Add per-user model API keys and tune rule sets globally or per repo."
                 ],
                 hero_actions,
+                div(class_="grid gap-2 text-sm text-muted-foreground")[
+                    strong(class_="text-foreground")["Works entirely from GitHub."],
+                    span[
+                        "The UI is a control plane for installs, rules, and ops — the conversation happens in PR comments."
+                    ],
+                ],
             ],
             card(title="Live review preview", description="GitHub comment thread")[
                 div(class_="grid gap-3 text-sm text-muted-foreground")[
@@ -204,20 +213,41 @@ def home(request: HttpRequest) -> HttpResponse:
         ],
     ]
 
-    flow = div(class_="grid gap-6 md:grid-cols-3")[
-        card(title="1. Install the app", description="Org or repo install")[
+    setup_flow = div(class_="grid gap-6 md:grid-cols-3")[
+        card(title="1. Create an account", description="Control plane access")[
             p(class_="text-sm text-muted-foreground")[
-                "Grant permissions once and pick repos in the UI."
+                "Each user brings their own GitHub App and AI provider keys."
             ]
         ],
-        card(title="2. Configure rules", description="Global + per repo")[
+        card(
+            title="2. Create your GitHub App",
+            description="Manifest flow (Coolify-style)",
+        )[
             p(class_="text-sm text-muted-foreground")[
-                "Use rule sets to highlight what matters most."
+                "We redirect you to GitHub with a pre-filled App Manifest and store the app credentials on return."
             ]
         ],
-        card(title="3. Review & learn", description="Feedback loop")[
+        card(title="3. Install the app", description="Org or repo install")[
             p(class_="text-sm text-muted-foreground")[
-                "Use /ai like or /ai dislike to tune reviews."
+                "Choose which repos to grant access to so we can receive webhooks and fetch PR diffs."
+            ]
+        ],
+    ]
+
+    runtime_flow = div(class_="grid gap-6 md:grid-cols-3")[
+        card(title="4. Webhook ingestion", description="PR + comment events")[
+            p(class_="text-sm text-muted-foreground")[
+                "GitHub calls a per-app webhook URL. We verify the signature using the app’s webhook secret."
+            ]
+        ],
+        card(title="5. Background review", description="Celery worker + OpenCode")[
+            p(class_="text-sm text-muted-foreground")[
+                "The worker fetches the PR diff via the GitHub API and runs OpenCode with your per-user model key."
+            ]
+        ],
+        card(title="6. GitHub-native loop", description="Comments + feedback")[
+            p(class_="text-sm text-muted-foreground")[
+                "A placeholder 👁 comment is posted immediately, then edited with the full review. Use /ai like, /ai dislike, /ai ignore."
             ]
         ],
     ]
@@ -236,6 +266,37 @@ def home(request: HttpRequest) -> HttpResponse:
         card(title="Configurable", description="Global + repo rules.")[
             p(class_="text-sm text-muted-foreground")[
                 "Tune instruction sets per repo without editing config files."
+            ]
+        ],
+    ]
+
+    architecture = div(class_="grid gap-6 md:grid-cols-2")[
+        card(title="Control plane (this UI)", description="Django + HTMX + htpy")[
+            ul(class_="space-y-1 text-sm text-muted-foreground")[
+                li["Manage your GitHub App + installation status."],
+                li["Create global and per-repo rule sets."],
+                li["Store per-user AI provider API keys (no env vars)."],
+            ]
+        ],
+        card(title="Data plane", description="Webhook → queue → review")[
+            ul(class_="space-y-1 text-sm text-muted-foreground")[
+                li["Webhook endpoint validates per-app signatures."],
+                li["Celery job fetches PR diff and generates a review."],
+                li["Bot posts/edits GitHub issue comments with results."],
+            ]
+        ],
+        card(title="Security model", description="Per-user isolation")[
+            ul(class_="space-y-1 text-sm text-muted-foreground")[
+                li[
+                    "Each user has their own GitHub App credentials and webhook secret."
+                ],
+                li["Each user stores their own model API keys in the database."],
+                li["The worker injects keys at runtime when calling OpenCode."],
+            ]
+        ],
+        card(title="Local dev note", description="GitHub requires public webhooks")[
+            p(class_="text-sm text-muted-foreground")[
+                "GitHub App webhooks must be reachable from the public Internet. For local dev, use a tunnel (e.g. Cloudflare Tunnel/ngrok) to expose this app."
             ]
         ],
     ]
@@ -259,9 +320,27 @@ def home(request: HttpRequest) -> HttpResponse:
     content = div(class_="space-y-12")[
         hero,
         stats,
-        section_block()[div(class_="grid gap-6")[section_header("How it works"), flow]],
+        section_block()[
+            div(class_="grid gap-6")[
+                section_header(
+                    "How it works", subtitle="End-to-end flow", align="left"
+                ),
+                setup_flow,
+                runtime_flow,
+            ]
+        ],
         section_block()[
             div(class_="grid gap-6")[section_header("What you get"), features]
+        ],
+        section_block()[
+            div(class_="grid gap-6")[
+                section_header(
+                    "Architecture",
+                    subtitle="Control plane vs data plane (MVP)",
+                    align="left",
+                ),
+                architecture,
+            ]
         ],
         cta,
     ]
@@ -838,8 +917,7 @@ def _rule_set_form(
 
     return card(
         title="Create Rule Set", description="Define global or repo-specific rules."
-    )
-    [
+    )[
         form_component(action="/rules/create", method="post")[
             csrf_input(request),
             form_field[
