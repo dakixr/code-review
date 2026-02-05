@@ -16,7 +16,7 @@ from components.ui.form import form_component, form_field
 from components.ui.input import input_component
 from components.ui.lucide import lucide_auto_init_script, lucide_cdn_script, lucide_icon
 from components.ui.navbar import navbar
-from components.ui.section import section_block, section_header
+from components.ui.section import section_header
 from components.ui.table import table_component
 from components.ui.textarea import textarea_component
 from components.ui.theme_toggle import theme_toggle
@@ -981,7 +981,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
                     class_="w-8 h-8 rounded-lg bg-muted flex items-center justify-center"
                 )[lucide_icon("chart-bar", class_="size-4 text-muted-foreground")],
                 div[
-                    h2(class_="font-semibold")["Recent activity"],
+                    h2(class_="font-semibold")["Operational visibility"],
                     p(class_="text-xs text-muted-foreground")[
                         "Review runs from your repositories"
                     ],
@@ -1324,7 +1324,7 @@ def account(request: HttpRequest) -> HttpResponse:
                                 form_field[
                                     input_component(
                                         name="zai_api_key",
-                                        label_text="Z.AI API key",
+                                        label_text="Z.AI Coding Plan API key (for zai-coding-plan/glm-4.7)",
                                         placeholder="paste your key",
                                         value=masked_zai,
                                     )

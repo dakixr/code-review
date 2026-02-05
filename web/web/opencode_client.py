@@ -242,6 +242,13 @@ def run_opencode(
             if not isinstance(event, dict):
                 continue
 
+            part = event.get("part")
+            if isinstance(part, dict):
+                part_text = part.get("text")
+                if isinstance(part_text, str) and part_text.strip():
+                    assistant_chunks.append(part_text.strip())
+                    continue
+
             # Heuristic extraction: OpenCode event schemas can vary; capture likely assistant content.
             msg = event.get("message")
             if isinstance(msg, dict) and msg.get("role") == "assistant":
@@ -260,8 +267,15 @@ def run_opencode(
 
         final_text = "\n\n".join(chunk for chunk in assistant_chunks if chunk)
         if not final_text:
-            stderr = (proc.stderr or "").strip()
+            stdout_preview = _compact_output(proc.stdout or "")
+            stderr_preview = _compact_output(proc.stderr or "")
+            details_parts = []
+            if stderr_preview:
+                details_parts.append(f"stderr:\n{stderr_preview}")
+            if stdout_preview:
+                details_parts.append(f"stdout:\n{stdout_preview}")
+            details = "\n\n".join(details_parts) or "no output captured"
             raise RuntimeError(
-                f"opencode returned no assistant text (exit={proc.returncode}): {stderr}"
+                f"opencode returned no assistant text (exit={proc.returncode}): {details}"
             )
         return OpenCodeResult(text=final_text)

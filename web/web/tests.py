@@ -214,6 +214,45 @@ class OpenCodeClientTest(SimpleTestCase):
         assert "--" in captured_args
         assert captured_args.index("--") < captured_args.index("hello world")
 
+    def test_extracts_text_part_events(self) -> None:
+        def fake_run(
+            args: list[str],
+            *,
+            env: dict[str, str],
+            cwd: str | None,
+            check: bool,
+            stdin: object,
+            capture_output: bool,
+            text: bool,
+            timeout: float,
+        ):
+            del args, env, cwd, check, stdin, capture_output, text, timeout
+
+            class Result:
+                returncode = 0
+                stdout = (
+                    '{"type":"step_start","part":{"type":"step-start"}}\n'
+                    '{"type":"text","part":{"type":"text","text":"hello from part"}}\n'
+                    '{"type":"step_finish","part":{"type":"step-finish"}}\n'
+                )
+                stderr = ""
+
+            return Result()
+
+        from . import opencode_client as client
+
+        original_run = client.subprocess.run
+        client.subprocess.run = fake_run  # type: ignore[assignment]
+        try:
+            result = run_opencode(
+                message="hello",
+                env={"OPENCODE_BIN": "/bin/echo"},
+            )
+        finally:
+            client.subprocess.run = original_run  # type: ignore[assignment]
+
+        assert result.text == "hello from part"
+
 
 class ChatResponseTaskTest(TestCase):
     def setUp(self) -> None:
