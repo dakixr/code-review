@@ -10,6 +10,7 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.utils import timezone
+from django.core.management import call_command
 
 from .models import (
     ChatMessage,
@@ -346,3 +347,36 @@ class ChatResponseTaskTest(TestCase):
             github_comment_id=999,
             author="codereview",
         ).exists()
+
+
+class OpenCodeProbeCommandTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="alice", password="pw")
+        UserApiKey.objects.create(
+            user=self.user,
+            provider=UserApiKey.PROVIDER_ZAI,
+            api_key="test-key",
+            is_active=True,
+        )
+
+    def test_opencode_probe_uses_db_key_and_prints_output(self) -> None:
+        import io
+
+        from .opencode_client import OpenCodeResult
+
+        with patch(
+            "web.management.commands.opencode_probe.run_opencode",
+            return_value=OpenCodeResult(text="hello from model"),
+        ):
+            stdout = io.StringIO()
+            out = call_command(
+                "opencode_probe",
+                "hi",
+                "there",
+                "--user",
+                "alice",
+                "--no-files",
+                stdout=stdout,
+            )
+        assert "hello from model" in str(out)
+        assert "hello from model" in stdout.getvalue()

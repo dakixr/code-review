@@ -21,6 +21,12 @@ from .opencode_client import run_opencode
 
 logger = logging.getLogger(__name__)
 
+_ZAI_TOKEN_ERROR_SUBSTRINGS = {
+    "token expired or incorrect",
+    "invalid api key",
+    "invalid apikey",
+}
+
 
 @shared_task
 def run_pr_review(review_run_id: int) -> None:
@@ -75,6 +81,7 @@ def run_pr_review(review_run_id: int) -> None:
             .values_list("api_key", flat=True)
             .first()
         )
+        api_key = (api_key or "").strip()
         if not api_key:
             raise RuntimeError(
                 "Missing ZAI API key for this user. Go to Account → API Keys and set it."
@@ -170,6 +177,11 @@ def run_pr_review(review_run_id: int) -> None:
         review_run.save(update_fields=["status", "finished_at", "summary"])
     except Exception as e:
         error_text = str(e).strip() or "Unknown error"
+        if _looks_like_zai_auth_error(error_text):
+            error_text = (
+                "ZAI API key rejected (token expired or incorrect). "
+                "Go to Account → API Keys and update your ZAI key."
+            )
         logger.exception(
             "review.failed review_run_id=%s error=%s", review_run_id, error_text
         )
@@ -262,6 +274,7 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             .values_list("api_key", flat=True)
             .first()
         )
+        api_key = (api_key or "").strip()
         if not api_key:
             raise RuntimeError(
                 "Missing ZAI API key for this user. Go to Account → API Keys and set it."
@@ -400,6 +413,11 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
         )
     except Exception as e:
         error_text = str(e).strip() or "Unknown error"
+        if _looks_like_zai_auth_error(error_text):
+            error_text = (
+                "ZAI API key rejected (token expired or incorrect). "
+                "Go to Account → API Keys and update your ZAI key."
+            )
         logger.exception(
             "chat.failed pull_request_id=%s chat_message_id=%s error=%s",
             pull_request_id,
@@ -424,6 +442,11 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             )
         except Exception:
             pass
+
+
+def _looks_like_zai_auth_error(message: str) -> bool:
+    normalized = message.strip().lower()
+    return any(substr in normalized for substr in _ZAI_TOKEN_ERROR_SUBSTRINGS)
 
 
 def _extract_user_query(body: str) -> str:
