@@ -12,13 +12,6 @@ If you only want local reviews, start with `cli/`. If you want the GitHub App + 
 - `cli/` — Typer-based Python CLI (`codereview` command). See `cli/README.md`.
 - `web/` — Django 5.x app (HTMX + htpy) + Celery worker + Tailwind. See `web/README.md`.
 
-## Prereqs
-
-- Python 3.12+
-- [`uv`](https://github.com/astral-sh/uv)
-- For `web/`: Docker (recommended) and `pnpm` (for Tailwind builds)
-- For `cli/`: OpenCode installed and on your `PATH` (`opencode`)
-
 ## Quick start (CLI)
 
 Run from this repo:
