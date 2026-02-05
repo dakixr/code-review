@@ -768,6 +768,7 @@ def _git_checkout_repo_at_sha(
     repo_full_name: str,
     head_sha: str,
     token: str,
+    timeout_seconds: float = 120,
 ) -> None:
     git = shutil.which("git")
     if not git:
@@ -800,6 +801,7 @@ def _git_checkout_repo_at_sha(
             check=False,
             capture_output=True,
             text=True,
+            timeout=timeout_seconds,
         )
         if proc.returncode != 0:
             stderr = (proc.stderr or "").strip()
@@ -831,6 +833,7 @@ def _download_and_extract_zipball(
         ref=head_sha,
         token=token,
         dest_path=zip_path,
+        timeout_seconds=120,
     )
     _extract_zipball_to_repo_dir(
         zip_path=zip_path,

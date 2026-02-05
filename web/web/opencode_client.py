@@ -13,6 +13,18 @@ class OpenCodeResult:
     text: str
 
 
+def _default_timeout_seconds() -> float:
+    configured = (os.getenv("OPENCODE_TIMEOUT_SECONDS") or "").strip()
+    if configured:
+        try:
+            value = float(configured)
+        except ValueError:
+            value = 0
+        if value > 0:
+            return value
+    return 900.0
+
+
 def _resolve_opencode_bin(*, merged_env: dict[str, str], configured_bin: str) -> str:
     candidates = [configured_bin]
     if configured_bin == "opencode":
@@ -79,6 +91,7 @@ def run_opencode(
     files: list[Path] | None = None,
     env: dict[str, str],
     cwd: Path | None = None,
+    timeout_seconds: float | None = None,
 ) -> OpenCodeResult:
     """Run OpenCode in headless mode and return the assistant text.
 
@@ -87,6 +100,8 @@ def run_opencode(
         files: Optional list of files to attach to the message.
         env: Environment overrides (e.g. per-user provider API keys).
         cwd: Optional working directory to run OpenCode in.
+        timeout_seconds: Maximum runtime before aborting. Defaults to
+            OPENCODE_TIMEOUT_SECONDS or 900 seconds.
 
     Raises:
         RuntimeError: If OpenCode fails or returns an error event.
@@ -111,6 +126,11 @@ def run_opencode(
     args.append(message)
 
     try:
+        effective_timeout = (
+            float(timeout_seconds)
+            if timeout_seconds is not None
+            else _default_timeout_seconds()
+        )
         proc = subprocess.run(
             args,
             env=merged_env,
@@ -118,12 +138,20 @@ def run_opencode(
             check=False,
             capture_output=True,
             text=True,
+            timeout=effective_timeout,
         )
     except FileNotFoundError as e:
         raise RuntimeError(
             _format_opencode_start_error(
                 opencode_bin=opencode_bin, merged_env=merged_env
             )
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        stdout = (e.stdout or "").strip()
+        stderr = (e.stderr or "").strip()
+        details = stderr or stdout or "no output captured"
+        raise RuntimeError(
+            f"opencode timed out after {effective_timeout:.0f}s: {details}"
         ) from e
 
     # OpenCode emits line-delimited JSON events on stdout in `--format json` mode.

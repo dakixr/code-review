@@ -177,8 +177,9 @@ class OpenCodeClientTest(SimpleTestCase):
             check: bool,
             capture_output: bool,
             text: bool,
+            timeout: float,
         ):
-            del env, cwd, check, capture_output, text
+            del env, cwd, check, capture_output, text, timeout
             captured_args.extend(args)
 
             class Result:

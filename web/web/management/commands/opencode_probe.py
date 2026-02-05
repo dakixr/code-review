@@ -49,6 +49,13 @@ class Command(BaseCommand):
             action="store_true",
             help="Do not attach a probe context file.",
         )
+        parser.add_argument(
+            "--timeout-seconds",
+            dest="timeout_seconds",
+            type=float,
+            default=120.0,
+            help="Abort OpenCode if it runs longer than this (default: 120s).",
+        )
 
     def handle(self, *args, **options) -> str:
         message = " ".join(options["message"]).strip()
@@ -75,10 +82,20 @@ class Command(BaseCommand):
                     "If you can read attached files, reply with the title of this file.\n",
                     encoding="utf-8",
                 )
-                result = run_opencode(message=message, files=[context_path], env=env)
+                result = run_opencode(
+                    message=message,
+                    files=[context_path],
+                    env=env,
+                    timeout_seconds=float(options.get("timeout_seconds") or 120.0),
+                )
                 output = result.text.strip()
         else:
-            result = run_opencode(message=message, files=None, env=env)
+            result = run_opencode(
+                message=message,
+                files=None,
+                env=env,
+                timeout_seconds=float(options.get("timeout_seconds") or 120.0),
+            )
             output = result.text.strip()
 
         if not output:
