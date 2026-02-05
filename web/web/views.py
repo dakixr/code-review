@@ -3,19 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+from datetime import datetime, timedelta
 from typing import Iterable, cast
 from uuid import UUID
 
-from components.ui.button import button_component
-from components.ui.card import card
-from components.ui.form import form_component, form_field
-from components.ui.input import input_component
-from components.ui.navbar import navbar
-from components.ui.section import section_block, section_header
-from components.ui.textarea import textarea_component
-from components.ui.theme_toggle import theme_toggle
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.messages.storage.base import Message
 from django.contrib.auth import authenticate
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
@@ -54,6 +48,19 @@ from htpy import (
 )
 from htpy import input as input_el
 
+from components.ui._types import AlertVariant
+from components.ui.alert import alert
+from components.ui.button import button_component
+from components.ui.card import card
+from components.ui.badge import badge_count, badge_status
+from components.ui.form import form_component, form_field
+from components.ui.input import input_component
+from components.ui.navbar import navbar
+from components.ui.section import section_block, section_header
+from components.ui.table import table_component
+from components.ui.textarea import textarea_component
+from components.ui.theme_toggle import theme_toggle
+
 from . import github
 from .github import parse_webhook_body, verify_webhook_signature
 from .models import (
@@ -63,6 +70,7 @@ from .models import (
     GithubInstallation,
     GithubRepository,
     PullRequest,
+    ReviewRun,
     Rule,
     RuleSet,
     UserApiKey,
@@ -82,6 +90,22 @@ PAGE_SHELL_CLASS = "min-h-screen bg-background text-foreground"
 CONTENT_CLASS = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
 
 logger = logging.getLogger(__name__)
+
+
+def _review_run_status_badge(status: str) -> Renderable:
+    mapping = {
+        ReviewRun.STATUS_QUEUED: "pending",
+        ReviewRun.STATUS_RUNNING: "processing",
+        ReviewRun.STATUS_DONE: "completed",
+        ReviewRun.STATUS_FAILED: "failed",
+    }
+    return badge_status(mapping.get(status, "pending"))
+
+
+def _format_datetime(value: datetime | None) -> str:
+    if not value:
+        return "—"
+    return localtime(value).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def render_htpy(content: Renderable) -> HttpResponse:
@@ -218,6 +242,9 @@ def home(request: HttpRequest) -> HttpResponse:
                     ],
                     div(
                         class_="rounded-lg border border-border/60 bg-background/70 p-3"
+                    )["@codereview can you double-check the auth flow edge cases?"],
+                    div(
+                        class_="rounded-lg border border-border/60 bg-background/70 p-3"
                     )["/ai like"],
                 ],
             ],
@@ -258,7 +285,7 @@ def home(request: HttpRequest) -> HttpResponse:
         ],
         card(title="6. GitHub-native loop", description="Comments + feedback")[
             p(class_="text-sm text-muted-foreground")[
-                "A placeholder 👁 comment is posted immediately, then edited with the full review. Use /ai like, /ai dislike, /ai ignore."
+                "A placeholder 👁 comment is posted immediately, then edited with the full review. Mention @codereview for on-demand help; use /ai like, /ai dislike, /ai ignore as feedback signals."
             ]
         ],
     ]
@@ -454,14 +481,230 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             ]
         )
 
-    content = div(class_="space-y-6")[
+    since = timezone.now() - timedelta(days=7)
+    recent_runs = (
+        ReviewRun.objects.select_related("pull_request__repository")
+        .filter(pull_request__repository__installation__github_app__owner=request.user)
+        .order_by("-created_at")[:25]
+    )
+    run_count_7d = ReviewRun.objects.filter(
+        pull_request__repository__installation__github_app__owner=request.user,
+        created_at__gte=since,
+    ).count()
+    failed_count_7d = ReviewRun.objects.filter(
+        pull_request__repository__installation__github_app__owner=request.user,
+        created_at__gte=since,
+        status=ReviewRun.STATUS_FAILED,
+    ).count()
+
+    run_rows: list[list[Node]] = []
+    for run in recent_runs:
+        pr = run.pull_request
+        repo = pr.repository
+        created = localtime(run.created_at).strftime("%Y-%m-%d %H:%M")
+        sha_short = run.head_sha[:7]
+        error_preview = run.error_message.strip()
+        if len(error_preview) > 80:
+            error_preview = f"{error_preview[:77]}..."
+
+        run_rows.append(
+            [
+                created,
+                escape(repo.full_name),
+                a(
+                    href=pr.html_url,
+                    class_="text-sm text-muted-foreground hover:text-foreground transition-colors",
+                    target="_blank",
+                    rel="noreferrer",
+                )[f"#{pr.pr_number}"],
+                span(class_="font-mono text-xs text-muted-foreground")[sha_short],
+                _review_run_status_badge(run.status),
+                span(class_="text-xs text-muted-foreground")[
+                    escape(error_preview)
+                    if run.status == ReviewRun.STATUS_FAILED
+                    else ""
+                ],
+                a(href=f"/app/review-runs/{run.id}")[
+                    button_component(variant="outline")["Details"]
+                ],
+            ]
+        )
+
+    ops_card = card(
+        title="Operational visibility",
+        description="Recent review runs and failures.",
+        bordered_header=True,
+    )[
+        div(class_="flex flex-wrap items-center gap-3")[
+            span(class_="text-sm text-muted-foreground")["Last 7 days"],
+            badge_count(run_count_7d, cap=99, variant="secondary"),
+            span(class_="text-sm text-muted-foreground")["Failures"],
+            badge_count(failed_count_7d, cap=99, variant="destructive"),
+        ],
+        div(class_="pt-4")[
+            table_component(
+                headers=["When", "Repo", "PR", "SHA", "Status", "Error", ""],
+                rows=run_rows,
+            )
+            if run_rows
+            else p(class_="text-sm text-muted-foreground")[
+                "No review runs yet. Once you open a PR on an installed repo, the reviewer will start logging runs here."
+            ]
+        ],
+    ]
+
+    content = div(class_="space-y-8")[
         section_header(
             "Dashboard", subtitle="Manage installs and repo coverage.", align="left"
         ),
         div(class_="grid gap-6 md:grid-cols-2")[*cards],
+        ops_card,
     ]
 
     return layout(request, content, page_title="Dashboard")
+
+
+def review_run_detail(request: HttpRequest, review_run_id: int) -> HttpResponse:
+    if not request.user.is_authenticated:
+        content = div(class_="space-y-6")[
+            section_header(
+                "Review run",
+                subtitle="Sign in to see operational details.",
+                align="left",
+            ),
+            card(
+                title="Sign in required",
+                description="Create an account to connect GitHub.",
+            )[
+                a(href="/account")[
+                    button_component(variant="primary")["Go to account"]
+                ],
+            ],
+        ]
+        return layout(request, content, page_title="Review run")
+
+    try:
+        review_run = ReviewRun.objects.select_related(
+            "pull_request__repository__installation__github_app"
+        ).get(
+            id=review_run_id,
+            pull_request__repository__installation__github_app__owner=request.user,
+        )
+    except ReviewRun.DoesNotExist as e:
+        raise Http404("Review run not found") from e
+
+    pr = review_run.pull_request
+    repo = pr.repository
+
+    started_at = review_run.started_at
+    finished_at = review_run.finished_at
+    duration_text = "—"
+    if started_at and finished_at:
+        duration_text = str(finished_at - started_at).split(".", maxsplit=1)[0]
+
+    meta_rows: list[list[Node]] = [
+        [
+            strong["Repository"],
+            a(
+                href=repo.html_url,
+                target="_blank",
+                rel="noreferrer",
+                class_="text-sm text-muted-foreground hover:text-foreground transition-colors",
+            )[escape(repo.full_name)],
+        ],
+        [
+            strong["Pull request"],
+            a(
+                href=pr.html_url,
+                target="_blank",
+                rel="noreferrer",
+                class_="text-sm text-muted-foreground hover:text-foreground transition-colors",
+            )[escape(f"#{pr.pr_number} — {pr.title}")],
+        ],
+        [
+            strong["Head SHA"],
+            span(class_="font-mono text-xs text-muted-foreground")[review_run.head_sha],
+        ],
+        [strong["Status"], _review_run_status_badge(review_run.status)],
+        [strong["Created"], _format_datetime(review_run.created_at)],
+        [strong["Started"], _format_datetime(review_run.started_at)],
+        [strong["Finished"], _format_datetime(review_run.finished_at)],
+        [
+            strong["Duration"],
+            span(class_="text-sm text-muted-foreground")[duration_text],
+        ],
+        [
+            strong["Run ID"],
+            span(class_="font-mono text-xs text-muted-foreground")[str(review_run.id)],
+        ],
+    ]
+
+    comments = review_run.comments.order_by("created_at").all()
+    comment_nodes: list[Renderable] = []
+    for comment in comments:
+        comment_nodes.append(
+            card(
+                title=f"Comment {comment.github_comment_id or ''}".strip(),
+                description=_format_datetime(comment.created_at),
+                bordered_header=True,
+            )[
+                textarea_component(
+                    value=escape(comment.body),
+                    readonly=True,
+                    rows=8,
+                    class_="font-mono text-xs",
+                )
+            ]
+        )
+
+    content = div(class_="space-y-6")[
+        section_header(
+            "Review run",
+            subtitle="Operational details for a single run.",
+            align="left",
+        ),
+        div(class_="flex flex-wrap items-center gap-3")[
+            a(href="/app")[button_component(variant="outline")["Back to dashboard"]],
+            _review_run_status_badge(review_run.status),
+        ],
+        card(title="Run metadata", description="Where this run came from.")[
+            table_component(headers=["Field", "Value"], rows=meta_rows),
+        ],
+        card(
+            title="Summary",
+            description="The final text posted to GitHub (escaped).",
+            bordered_header=True,
+        )[
+            textarea_component(
+                value=escape(review_run.summary or ""),
+                readonly=True,
+                rows=14,
+                class_="font-mono text-xs",
+            )
+        ],
+        card(
+            title="Error",
+            description="Populated only for failed runs.",
+            bordered_header=True,
+        )[
+            textarea_component(
+                value=escape(review_run.error_message or ""),
+                readonly=True,
+                rows=6,
+                class_="font-mono text-xs",
+            )
+        ],
+        card(
+            title="Comments",
+            description="Every GitHub comment we created/updated for this run.",
+            bordered_header=True,
+        )[
+            div(class_="space-y-4")[*comment_nodes]
+            if comment_nodes
+            else p(class_="text-sm text-muted-foreground")["No comments recorded."],
+        ],
+    ]
+    return layout(request, content, page_title="Review run")
 
 
 def account(request: HttpRequest) -> HttpResponse:
@@ -1576,10 +1819,23 @@ def _login_form(request: HttpRequest) -> Renderable:
 
 
 def _flash_messages(request: HttpRequest) -> Renderable:
+    def message_variant(message: Message) -> AlertVariant:
+        if message.level >= messages.ERROR:
+            return "destructive"
+        if message.level >= messages.WARNING:
+            return "warning"
+        if message.level >= messages.INFO:
+            return "info"
+        if message.level >= messages.SUCCESS:
+            return "success"
+        return "default"
+
     items = [
-        card(description=str(message), class_="border border-destructive/30")[
-            p(class_="text-sm text-muted-foreground")[str(message)]
-        ]
+        alert(
+            title=str(message),
+            variant=message_variant(message),
+            class_="border border-border/60 bg-background/80 backdrop-blur-sm",
+        )
         for message in messages.get_messages(request)
     ]
     if not items:

@@ -6,7 +6,7 @@ Build a **GitHub-native AI code reviewer** that feels like Greptile/CodeRabbit:
 
 1. User installs a GitHub App on an org/repo.
 2. On PR open/synchronize, the bot immediately comments with **👁** (“working”), then edits/posts the full review.
-3. Users “chat” with the bot **in GitHub comments** (not in this web UI).
+3. Users “chat” with the bot **in GitHub comments** (not in this web UI) by mentioning it with `@codereview`.
 4. The system learns preferences from explicit feedback (e.g. `/ai like`, `/ai dislike`, `/ai ignore`) and from accumulated rule configuration.
 
 This web app is the control plane:
@@ -22,6 +22,18 @@ This web app is the control plane:
 - WhiteNoise + `collectstatic` for production static serving.
 - OpenCode installed in the image with default model `zai/glm-4.7` (see `web/opencode.json`).
 - `pyjwt[crypto]` (Cryptography) for GitHub App JWT signing (RS256).
+
+## GitHub Comment API (MVP)
+
+This app is designed to be driven from PR comments.
+
+- **Ask the bot (on-demand)**: mention it in a PR issue comment:
+  - `@codereview review this PR with a focus on auth/security`
+  - `@codereview please only comment on the migration + API changes`
+- **Feedback signals** (recorded, used to adapt future reviews):
+  - `/ai like` — the last review was helpful
+  - `/ai dislike` — the last review was not helpful
+  - `/ai ignore` — ignore the last review’s guidance for this repo
 
 ## Troubleshooting
 
