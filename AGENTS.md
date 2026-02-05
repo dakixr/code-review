@@ -78,12 +78,6 @@ uv run pyright
 - Use built-in generics (e.g., `list[str]` instead of `List[str]`)
 - Type all function parameters and return values
 
-**Naming Conventions:**
-- `snake_case` for variables, functions, methods
-- `PascalCase` for classes
-- `UPPER_CASE` for constants
-- Private functions/methods prefixed with `_`
-
 **Error Handling:**
 - Use specific exceptions, avoid bare `except:`
 - Use `raise from` when re-raising exceptions
