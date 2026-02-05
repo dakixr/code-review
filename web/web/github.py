@@ -15,6 +15,10 @@ from django.conf import settings
 from .models import GithubInstallation
 
 
+_GITHUB_API_VERSION = "2022-11-28"
+_GITHUB_USER_AGENT = "codereview"
+
+
 @dataclass
 class GithubAppAuth:
     app_id: str
@@ -75,17 +79,79 @@ def verify_webhook_signature(body: bytes, signature: str, secret: str) -> bool:
     return hmac.compare_digest(expected, provided)
 
 
+def _github_timeout(total_seconds: float) -> httpx.Timeout:
+    """Return a GitHub-friendly timeout.
+
+    In some containerized environments, IPv6 can be a blackhole. A shorter
+    connect timeout helps fail over to IPv4 quickly and prevents jobs from
+    stalling for long periods.
+    """
+    connect_seconds = min(5.0, total_seconds)
+    pool_seconds = min(5.0, total_seconds)
+    return httpx.Timeout(
+        total_seconds,
+        connect=connect_seconds,
+        pool=pool_seconds,
+    )
+
+
 def get_installation_token(installation_id: int, auth: GithubAppAuth) -> str:
     jwt_token = build_jwt(auth)
     url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
     headers = {
         "Authorization": f"Bearer {jwt_token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
-    with httpx.Client(timeout=20) as client:
-        response = client.post(url, headers=headers)
-        response.raise_for_status()
-        return response.json()["token"]
+
+    max_attempts = 3
+    backoff_seconds = 0.5
+    timeout = _github_timeout(20.0)
+    last_exception: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(url, headers=headers)
+
+            response.raise_for_status()
+            data = response.json()
+            token = data.get("token") if isinstance(data, dict) else None
+            if not isinstance(token, str) or not token.strip():
+                raise RuntimeError(
+                    "GitHub installation token response did not include a token."
+                )
+            return token
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            if status_code in {502, 503, 504} and attempt < max_attempts:
+                last_exception = e
+            else:
+                raise
+        except (httpx.TimeoutException, httpx.NetworkError) as e:
+            last_exception = e
+        except Exception as e:
+            raise RuntimeError("Failed to create a GitHub installation token.") from e
+
+        if attempt < max_attempts:
+            time.sleep(backoff_seconds * (2 ** (attempt - 1)))
+
+    if isinstance(last_exception, httpx.TimeoutException):
+        raise RuntimeError(
+            "GitHub API request timed out while creating an installation token. "
+            "Ensure the worker has outbound HTTPS access to api.github.com:443 "
+            "(DNS/egress/proxy)."
+        ) from last_exception
+    if isinstance(last_exception, httpx.NetworkError):
+        raise RuntimeError(
+            "GitHub API request failed while creating an installation token. "
+            "Ensure the worker has outbound HTTPS access to api.github.com:443 "
+            "(DNS/egress/proxy)."
+        ) from last_exception
+    raise RuntimeError(
+        "GitHub API request failed while creating an installation token."
+    ) from last_exception
 
 
 def post_issue_comment(
@@ -102,8 +168,10 @@ def post_issue_comment(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
-    with httpx.Client(timeout=20) as client:
+    with httpx.Client(timeout=_github_timeout(20.0)) as client:
         response = client.post(url, headers=headers, json={"body": body})
         response.raise_for_status()
         return response.json()["id"]
@@ -123,9 +191,10 @@ def add_reaction_to_issue_comment(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
-    with httpx.Client(timeout=20) as client:
+    with httpx.Client(timeout=_github_timeout(20.0)) as client:
         response = client.post(url, headers=headers, json={"content": content})
         # GitHub returns 422 if the same user already reacted with this content.
         if response.status_code == 422:
@@ -145,8 +214,10 @@ def update_issue_comment(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
-    with httpx.Client(timeout=20) as client:
+    with httpx.Client(timeout=_github_timeout(20.0)) as client:
         response = client.patch(url, headers=headers, json={"body": body})
         response.raise_for_status()
 
@@ -166,6 +237,8 @@ def create_check_run(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
     payload: dict[str, object] = {
         "name": name,
@@ -176,7 +249,7 @@ def create_check_run(
         payload["conclusion"] = conclusion
     if output:
         payload["output"] = output
-    with httpx.Client(timeout=20) as client:
+    with httpx.Client(timeout=_github_timeout(20.0)) as client:
         response = client.post(url, headers=headers, json=payload)
         response.raise_for_status()
 
@@ -194,8 +267,12 @@ def convert_manifest_code(
     code: str, *, api_url: str = "https://api.github.com"
 ) -> dict:
     url = f"{api_url}/app-manifests/{code}/conversions"
-    headers = {"Accept": "application/vnd.github+json"}
-    with httpx.Client(timeout=20) as client:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
+    }
+    with httpx.Client(timeout=_github_timeout(20.0)) as client:
         response = client.post(url, headers=headers)
         response.raise_for_status()
         return response.json()
@@ -212,7 +289,7 @@ def fetch_pull_request_diff(
     token = token or get_installation_token(installation_id, auth)
     url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}"
     last_response: httpx.Response | None = None
-    with httpx.Client(timeout=40) as client:
+    with httpx.Client(timeout=_github_timeout(40.0)) as client:
         for accept in [
             "application/vnd.github.v3.diff",
             "application/vnd.github.v3.patch",
@@ -220,7 +297,8 @@ def fetch_pull_request_diff(
             headers = {
                 "Authorization": f"token {token}",
                 "Accept": accept,
-                "X-GitHub-Api-Version": "2022-11-28",
+                "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+                "User-Agent": _GITHUB_USER_AGENT,
             }
             response = client.get(url, headers=headers)
             last_response = response
@@ -326,8 +404,10 @@ def fetch_pull_request_json(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
-    with httpx.Client(timeout=40) as client:
+    with httpx.Client(timeout=_github_timeout(40.0)) as client:
         response = client.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
@@ -348,12 +428,14 @@ def list_pull_request_files(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
 
     files: list[dict] = []
     page = 1
     per_page = 100
-    with httpx.Client(timeout=40) as client:
+    with httpx.Client(timeout=_github_timeout(40.0)) as client:
         while len(files) < limit:
             url = (
                 f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}/files"
@@ -394,9 +476,11 @@ def fetch_repository_file_text(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
     params = {"ref": ref}
-    with httpx.Client(timeout=40) as client:
+    with httpx.Client(timeout=_github_timeout(40.0)) as client:
         response = client.get(url, headers=headers, params=params)
         if response.status_code == 404:
             return None
@@ -443,12 +527,14 @@ def list_installation_repositories(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
 
     repos: list[dict] = []
     page = 1
     per_page = 100
-    with httpx.Client(timeout=40) as client:
+    with httpx.Client(timeout=_github_timeout(40.0)) as client:
         while True:
             url = f"https://api.github.com/installation/repositories?per_page={per_page}&page={page}"
             response = client.get(url, headers=headers)
@@ -485,10 +571,12 @@ def download_repository_zipball(
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": _GITHUB_API_VERSION,
+        "User-Agent": _GITHUB_USER_AGENT,
     }
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     with httpx.Client(
-        timeout=timeout_seconds,
+        timeout=_github_timeout(timeout_seconds),
         follow_redirects=True,
     ) as client:
         with client.stream("GET", url, headers=headers) as response:

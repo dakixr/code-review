@@ -247,6 +247,7 @@ def run_pr_review(review_run_id: int) -> None:
             f"Error: `{error_text}`\n\n"
             "Troubleshooting:\n"
             "- If this is an API key issue, set it at Account → API Keys.\n"
+            "- If this is a GitHub connectivity issue (timeouts to `api.github.com`), ensure the worker has outbound HTTPS access (443) and any required proxy/DNS/egress rules are configured.\n"
             "- If this is an OpenCode install/runtime issue, ensure `opencode` is "
             "present and runnable in the worker image."
         )
@@ -491,6 +492,7 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             f"Error: `{error_text}`\n\n"
             "Troubleshooting:\n"
             "- If this is an API key issue, set it at Account → API Keys.\n"
+            "- If this is a GitHub connectivity issue (timeouts to `api.github.com`), ensure the worker has outbound HTTPS access (443) and any required proxy/DNS/egress rules are configured.\n"
             "- If this is an OpenCode install/runtime issue, ensure `opencode` is "
             "present and runnable in the worker image."
         )

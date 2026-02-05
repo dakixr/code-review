@@ -498,3 +498,39 @@ class GithubDiffFallbackTest(SimpleTestCase):
         assert "NOTE: GitHub did not return a unified PR diff" in diff_text
         assert "diff --git a/foo.py b/foo.py" in diff_text
         assert "@@ -1 +1 @@" in diff_text
+
+
+class GithubInstallationTokenTest(SimpleTestCase):
+    def test_get_installation_token_timeout_is_actionable(self) -> None:
+        class FakeClient:
+            def __enter__(self) -> FakeClient:
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                del exc_type, exc, tb
+                return False
+
+            def post(self, url: str, *, headers: dict[str, str]) -> None:
+                del url, headers
+                raise github.httpx.ConnectTimeout("timed out")
+
+        with (
+            patch.object(github, "build_jwt", return_value="jwt"),
+            patch.object(github.httpx, "Client", return_value=FakeClient()),
+            patch.object(github.time, "sleep", return_value=None),
+        ):
+            try:
+                github.get_installation_token(
+                    123,
+                    github.GithubAppAuth(
+                        app_id="1",
+                        private_key_pem="pem",
+                        webhook_secret="secret",
+                    ),
+                )
+            except RuntimeError as e:
+                message = str(e)
+                assert "installation token" in message.lower()
+                assert "api.github.com:443" in message
+            else:
+                raise AssertionError("Expected RuntimeError")
