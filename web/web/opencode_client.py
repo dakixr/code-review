@@ -74,7 +74,11 @@ def _format_opencode_start_error(
 
 
 def run_opencode(
-    *, message: str, files: list[Path] | None = None, env: dict[str, str]
+    *,
+    message: str,
+    files: list[Path] | None = None,
+    env: dict[str, str],
+    cwd: Path | None = None,
 ) -> OpenCodeResult:
     """Run OpenCode in headless mode and return the assistant text.
 
@@ -82,6 +86,7 @@ def run_opencode(
         message: The user prompt.
         files: Optional list of files to attach to the message.
         env: Environment overrides (e.g. per-user provider API keys).
+        cwd: Optional working directory to run OpenCode in.
 
     Raises:
         RuntimeError: If OpenCode fails or returns an error event.
@@ -109,6 +114,7 @@ def run_opencode(
         proc = subprocess.run(
             args,
             env=merged_env,
+            cwd=str(cwd) if cwd is not None else None,
             check=False,
             capture_output=True,
             text=True,

@@ -156,7 +156,9 @@ def run_pr_review(review_run_id: int) -> None:
             "Be crisp and actionable. Prefer pointing to specific files/lines.\n\n"
             "Context files:\n"
             "- `pull_request.diff` (the PR diff)\n"
-            "- `repo/` (a snapshot of the full repository at the PR head SHA)\n\n"
+            "- `repo_snapshot.md` (repo snapshot metadata)\n"
+            "- `repo_index.md` (full file listing)\n"
+            "You can read any file in the repository via the OpenCode project workspace.\n\n"
             "Project rules / preferences:\n"
             f"{rules_text}\n\n"
             "Task:\n"
@@ -182,12 +184,18 @@ def run_pr_review(review_run_id: int) -> None:
             repo_snapshot_path.write_text(repo_snapshot_md, encoding="utf-8")
 
             context_files: list[Path] = [diff_path, repo_snapshot_path]
+            repo_index_path = tmp_path / "repo_index.md"
             if repo_dir is not None:
-                context_files.append(repo_dir)
+                repo_index_path.write_text(
+                    _render_repo_index_markdown(repo_dir=repo_dir),
+                    encoding="utf-8",
+                )
+                context_files.append(repo_index_path)
             result = run_opencode(
                 message=prompt,
                 files=context_files,
                 env={"ZAI_API_KEY": api_key},
+                cwd=repo_dir,
             )
         logger.info("review.opencode_done review_run_id=%s", review_run_id)
 
@@ -343,6 +351,10 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             "PR diff, and a repository snapshot) to answer the user's request.\n"
             "Be crisp and actionable. Prefer pointing to specific files/lines.\n"
             "If something is uncertain or missing, ask a clarifying question instead of guessing.\n\n"
+            "Repository access:\n"
+            "- `repo_snapshot.md` (repo snapshot metadata)\n"
+            "- `repo_index.md` (full file listing)\n"
+            "You can read any file in the repository via the OpenCode project workspace.\n\n"
             "Project rules / preferences:\n"
             f"{rules_text}\n\n"
             "PR:\n"
@@ -395,13 +407,19 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             repo_snapshot_path = tmp_path / "repo_snapshot.md"
             repo_snapshot_path.write_text(repo_snapshot_md, encoding="utf-8")
             context_files.append(repo_snapshot_path)
+            repo_index_path = tmp_path / "repo_index.md"
             if repo_dir is not None:
-                context_files.append(repo_dir)
+                repo_index_path.write_text(
+                    _render_repo_index_markdown(repo_dir=repo_dir),
+                    encoding="utf-8",
+                )
+                context_files.append(repo_index_path)
 
             result = run_opencode(
                 message=prompt,
                 files=context_files,
                 env={"ZAI_API_KEY": api_key},
+                cwd=repo_dir,
             )
 
         response = result.text.strip()
@@ -734,7 +752,8 @@ def _prepare_repo_snapshot(
         f"- Repo: `{repo_full_name}`",
         f"- Ref: `{head_sha}`",
         f"- Method: {method}",
-        "- Attached: `repo/` (full working tree; `.git` metadata excluded when using git)",
+        "- OpenCode working dir: `repo/` (full working tree; `.git` metadata excluded when using git)",
+        "- Attached: `repo_index.md` (file listing)",
     ]
     if stats:
         file_count, total_bytes = stats
@@ -885,3 +904,61 @@ def _repo_stats(*, repo_dir: Path) -> tuple[int, int] | None:
         return file_count, total_bytes
     except Exception:
         return None
+
+
+def _render_repo_index_markdown(*, repo_dir: Path, max_paths: int = 8_000) -> str:
+    repo_dir_resolved = repo_dir.resolve()
+    paths: list[str] = []
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [
+            d
+            for d in dirs
+            if d
+            not in {
+                ".git",
+                ".hg",
+                ".svn",
+                "node_modules",
+                ".venv",
+                "venv",
+                "__pycache__",
+                ".mypy_cache",
+                ".pytest_cache",
+                ".ruff_cache",
+                "dist",
+                "build",
+                ".tox",
+            }
+        ]
+        root_path = Path(root)
+        for name in files:
+            if not name:
+                continue
+            path = (root_path / name).resolve()
+            if not path.is_relative_to(repo_dir_resolved):
+                continue
+            rel = path.relative_to(repo_dir_resolved).as_posix()
+            paths.append(rel)
+            if len(paths) >= max_paths:
+                break
+        if len(paths) >= max_paths:
+            break
+
+    paths.sort()
+    lines: list[str] = [
+        "# Repository file index",
+        "",
+        f"- Root: `{repo_dir_resolved.as_posix()}`",
+        f"- Listed: {len(paths):,} paths",
+        "",
+        "## Paths",
+        "",
+    ]
+    if not paths:
+        lines.append("- (no files found)")
+    else:
+        lines.extend([f"- `{p}`" for p in paths])
+        if len(paths) >= max_paths:
+            lines.append("")
+            lines.append(f"_Index truncated to {max_paths:,} paths._")
+    return "\n".join(lines).strip() + "\n"

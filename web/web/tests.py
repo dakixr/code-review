@@ -173,11 +173,12 @@ class OpenCodeClientTest(SimpleTestCase):
             args: list[str],
             *,
             env: dict[str, str],
+            cwd: str | None,
             check: bool,
             capture_output: bool,
             text: bool,
         ):
-            del env, check, capture_output, text
+            del env, cwd, check, capture_output, text
             captured_args.extend(args)
 
             class Result:
@@ -281,10 +282,13 @@ class ChatResponseTaskTest(TestCase):
 
         captured: dict[str, object] = {}
 
-        def fake_run_opencode(*, message: str, files: list[Path] | None, env: dict):
+        def fake_run_opencode(
+            *, message: str, files: list[Path] | None, env: dict, cwd: Path | None
+        ):
             captured["message"] = message
             captured["files"] = files or []
             captured["env"] = env
+            captured["cwd"] = cwd
             return OpenCodeResult(text="Here is a contextual answer.")
 
         def fake_prepare_repo_snapshot(*, tmp_path: Path, **_kwargs):
@@ -341,7 +345,9 @@ class ChatResponseTaskTest(TestCase):
         assert "latest_review_summary.md" in file_names
         assert "pull_request.md" in file_names
         assert "repo_snapshot.md" in file_names
-        assert "repo" in file_names
+        assert "repo_index.md" in file_names
+        assert isinstance(captured.get("cwd"), Path)
+        assert Path(captured["cwd"]).name == "repo"
 
         assert ChatMessage.objects.filter(
             pull_request=self.pull_request,
