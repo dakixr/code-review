@@ -13,6 +13,15 @@ class OpenCodeResult:
     text: str
 
 
+def _compact_output(text: str, *, max_chars: int = 2000) -> str:
+    normalized = (text or "").strip()
+    if not normalized:
+        return ""
+    if len(normalized) <= max_chars:
+        return normalized
+    return normalized[:max_chars].rstrip() + "…"
+
+
 def _default_timeout_seconds() -> float:
     configured = (os.getenv("OPENCODE_TIMEOUT_SECONDS") or "").strip()
     if configured:
@@ -131,11 +140,27 @@ def run_opencode(
             if timeout_seconds is not None
             else _default_timeout_seconds()
         )
+        log_level = (merged_env.get("OPENCODE_LOG_LEVEL") or "INFO").strip().upper()
+        if log_level not in {"DEBUG", "INFO", "WARN", "ERROR"}:
+            log_level = "INFO"
+
+        # Ensure OpenCode cannot block waiting for user input (permissions, auth, etc).
+        merged_env.setdefault("CI", "1")
+        merged_env.setdefault("TERM", "dumb")
+
+        # Helpful when diagnosing worker hangs: logs go to stderr, JSON events stay on stdout.
+        if "--print-logs" not in args:
+            args.insert(2, "--print-logs")
+        if "--log-level" not in args:
+            args.insert(3, "--log-level")
+            args.insert(4, log_level)
+
         proc = subprocess.run(
             args,
             env=merged_env,
             cwd=str(cwd) if cwd is not None else None,
             check=False,
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=effective_timeout,
@@ -147,8 +172,8 @@ def run_opencode(
             )
         ) from e
     except subprocess.TimeoutExpired as e:
-        stdout = (e.stdout or "").strip()
-        stderr = (e.stderr or "").strip()
+        stdout = _compact_output(str(e.stdout or ""))
+        stderr = _compact_output(str(e.stderr or ""))
         details = stderr or stdout or "no output captured"
         raise RuntimeError(
             f"opencode timed out after {effective_timeout:.0f}s: {details}"
@@ -157,7 +182,7 @@ def run_opencode(
     # OpenCode emits line-delimited JSON events on stdout in `--format json` mode.
     stdout = proc.stdout.strip()
     if not stdout:
-        stderr = (proc.stderr or "").strip()
+        stderr = _compact_output(proc.stderr or "")
         raise RuntimeError(
             f"opencode produced no output (exit={proc.returncode}): {stderr}"
         )

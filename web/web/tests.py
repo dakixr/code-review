@@ -175,11 +175,12 @@ class OpenCodeClientTest(SimpleTestCase):
             env: dict[str, str],
             cwd: str | None,
             check: bool,
+            stdin: object,
             capture_output: bool,
             text: bool,
             timeout: float,
         ):
-            del env, cwd, check, capture_output, text, timeout
+            del env, cwd, check, stdin, capture_output, text, timeout
             captured_args.extend(args)
 
             class Result:
