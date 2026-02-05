@@ -33,7 +33,7 @@ This app is designed to be driven from PR comments.
 - **Feedback signals** (recorded, used to adapt future reviews):
   - `/ai like` — the last review was helpful
   - `/ai dislike` — the last review was not helpful
-  - `/ai ignore` — ignore the last review’s guidance for this repo
+  - `/ai ignore` — ignore the last review's guidance for this repo
 
 ## Local Setup
 

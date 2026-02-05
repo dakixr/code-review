@@ -1,21 +1,26 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+import shutil
+import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
 
 from celery import shared_task
 from django.utils import timezone
 
 from . import github
-from .models import RuleSet, UserApiKey
 from .models import (
     ChatMessage,
     GithubRepository,
     PullRequest,
     ReviewComment,
     ReviewRun,
+    RuleSet,
+    UserApiKey,
 )
 from .opencode_client import run_opencode
 
@@ -87,11 +92,22 @@ def run_pr_review(review_run_id: int) -> None:
                 "Missing ZAI API key for this user. Go to Account → API Keys and set it."
             )
 
+        token = github.get_installation_token(installation.installation_id, auth)
+        pr_json = github.fetch_pull_request_json(
+            installation_id=installation.installation_id,
+            auth=auth,
+            repo_full_name=repository.full_name,
+            pull_number=pull_request.pr_number,
+            token=token,
+        )
+        head_sha = str(((pr_json.get("head") or {}).get("sha")) or "").strip()
+
         diff_text = github.fetch_pull_request_diff(
             installation_id=installation.installation_id,
             auth=auth,
             repo_full_name=repository.full_name,
             pull_number=pull_request.pr_number,
+            token=token,
         )
         logger.info(
             "review.diff_fetched review_run_id=%s chars=%s",
@@ -138,10 +154,14 @@ def run_pr_review(review_run_id: int) -> None:
         prompt = (
             "You are an AI code reviewer responding as a GitHub PR review comment.\n"
             "Be crisp and actionable. Prefer pointing to specific files/lines.\n\n"
+            "Context files:\n"
+            "- `pull_request.diff` (the PR diff)\n"
+            "- `repo/` (a snapshot of the full repository at the PR head SHA)\n\n"
             "Project rules / preferences:\n"
             f"{rules_text}\n\n"
             "Task:\n"
             "- Review the attached PR diff.\n"
+            "- Use the attached repository snapshot to confirm context when needed.\n"
             "- Call out correctness, security, performance, and maintainability issues.\n"
             "- If something is uncertain, ask a question instead of guessing.\n"
             "- Output Markdown suitable for a single GitHub comment.\n"
@@ -149,11 +169,24 @@ def run_pr_review(review_run_id: int) -> None:
         )
 
         with tempfile.TemporaryDirectory(prefix="codereview-ai-") as tmpdir:
-            diff_path = Path(tmpdir) / "pull_request.diff"
+            tmp_path = Path(tmpdir)
+            diff_path = tmp_path / "pull_request.diff"
             diff_path.write_text(diff_text, encoding="utf-8")
+            repo_dir, repo_snapshot_md = _prepare_repo_snapshot(
+                tmp_path=tmp_path,
+                repo_full_name=repository.full_name,
+                head_sha=head_sha,
+                token=token,
+            )
+            repo_snapshot_path = tmp_path / "repo_snapshot.md"
+            repo_snapshot_path.write_text(repo_snapshot_md, encoding="utf-8")
+
+            context_files: list[Path] = [diff_path, repo_snapshot_path]
+            if repo_dir is not None:
+                context_files.append(repo_dir)
             result = run_opencode(
                 message=prompt,
-                files=[diff_path],
+                files=context_files,
                 env={"ZAI_API_KEY": api_key},
             )
         logger.info("review.opencode_done review_run_id=%s", review_run_id)
@@ -249,15 +282,6 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
     )
     user_query = _extract_user_query(chat_message.body)
 
-    placeholder_body = "💬 Thinking about that now (loading PR context + repo files)…"
-    placeholder_comment_id = github.post_issue_comment(
-        installation_id=installation.installation_id,
-        auth=auth,
-        repo_full_name=repository.full_name,
-        issue_number=pull_request.pr_number,
-        body=placeholder_body,
-    )
-
     try:
         owner = getattr(installation.github_app, "owner", None)
         if not owner:
@@ -316,7 +340,7 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
         prompt = (
             "You are an AI assistant replying as a GitHub PR issue comment.\n"
             "Use the attached PR context files (conversation, latest review summary, "
-            "PR diff, and selected repository files) to answer the user's request.\n"
+            "PR diff, and a repository snapshot) to answer the user's request.\n"
             "Be crisp and actionable. Prefer pointing to specific files/lines.\n"
             "If something is uncertain or missing, ask a clarifying question instead of guessing.\n\n"
             "Project rules / preferences:\n"
@@ -362,20 +386,17 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             diff_path.write_text(diff_text, encoding="utf-8")
             context_files.append(diff_path)
 
-            files_index_path = tmp_path / "attached_files.md"
-            repo_root = tmp_path / "repo"
-            attached_paths, files_index_md = _fetch_and_write_pr_files(
-                repo_root=repo_root,
-                installation_id=installation.installation_id,
-                auth=auth,
+            repo_dir, repo_snapshot_md = _prepare_repo_snapshot(
+                tmp_path=tmp_path,
                 repo_full_name=repository.full_name,
-                pull_number=pull_request.pr_number,
                 head_sha=head_sha,
                 token=token,
             )
-            files_index_path.write_text(files_index_md, encoding="utf-8")
-            context_files.append(files_index_path)
-            context_files.extend(attached_paths)
+            repo_snapshot_path = tmp_path / "repo_snapshot.md"
+            repo_snapshot_path.write_text(repo_snapshot_md, encoding="utf-8")
+            context_files.append(repo_snapshot_path)
+            if repo_dir is not None:
+                context_files.append(repo_dir)
 
             result = run_opencode(
                 message=prompt,
@@ -386,7 +407,7 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
         response = result.text.strip()
         if not response:
             response = (
-                "I couldn’t generate a response from the model output. "
+                "I couldn't generate a response from the model output. "
                 "Can you rephrase your question or point me at specific files/areas?"
             )
 
@@ -394,16 +415,16 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
         if len(response) > max_comment_chars:
             response = response[:max_comment_chars].rstrip() + "\n\n_(truncated)_"
 
-        github.update_issue_comment(
+        reply_comment_id = github.post_issue_comment(
             installation_id=installation.installation_id,
             auth=auth,
             repo_full_name=repository.full_name,
-            comment_id=placeholder_comment_id,
+            issue_number=pull_request.pr_number,
             body=response,
         )
 
         ChatMessage.objects.update_or_create(
-            github_comment_id=placeholder_comment_id,
+            github_comment_id=reply_comment_id,
             defaults={
                 "pull_request": pull_request,
                 "author": "codereview",
@@ -433,11 +454,11 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             "present and runnable in the worker image."
         )
         try:
-            github.update_issue_comment(
+            github.post_issue_comment(
                 installation_id=installation.installation_id,
                 auth=auth,
                 repo_full_name=repository.full_name,
-                comment_id=placeholder_comment_id,
+                issue_number=pull_request.pr_number,
                 body=body,
             )
         except Exception:
@@ -653,3 +674,214 @@ def _fetch_and_write_pr_files(
         lines.append("- No files were listed for this PR.")
         lines.append("")
     return attached, "\n".join(lines).strip() + "\n"
+
+
+def _prepare_repo_snapshot(
+    *,
+    tmp_path: Path,
+    repo_full_name: str,
+    head_sha: str,
+    token: str,
+) -> tuple[Path | None, str]:
+    if not head_sha:
+        return (
+            None,
+            "# Repository snapshot\n\n- Skipped: could not determine PR head SHA.\n",
+        )
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir(parents=True, exist_ok=True)
+
+    method = ""
+    error: str | None = None
+    try:
+        _git_checkout_repo_at_sha(
+            repo_dir=repo_dir,
+            repo_full_name=repo_full_name,
+            head_sha=head_sha,
+            token=token,
+        )
+        method = "git (shallow fetch depth=1)"
+    except Exception as e:
+        error = str(e).strip() or "unknown error"
+        try:
+            shutil.rmtree(repo_dir, ignore_errors=True)
+            repo_dir.mkdir(parents=True, exist_ok=True)
+            _download_and_extract_zipball(
+                repo_dir=repo_dir,
+                repo_full_name=repo_full_name,
+                head_sha=head_sha,
+                token=token,
+            )
+            method = "zipball (GitHub API)"
+            error = None
+        except Exception as e2:
+            error = str(e2).strip() or error
+            shutil.rmtree(repo_dir, ignore_errors=True)
+            return (
+                None,
+                "# Repository snapshot\n\n"
+                f"- Repo: `{repo_full_name}`\n"
+                f"- Ref: `{head_sha}`\n"
+                "- Failed to prepare a full codebase snapshot.\n"
+                f"- Error: `{error}`\n",
+            )
+
+    stats = _repo_stats(repo_dir=repo_dir)
+    lines: list[str] = [
+        "# Repository snapshot",
+        "",
+        f"- Repo: `{repo_full_name}`",
+        f"- Ref: `{head_sha}`",
+        f"- Method: {method}",
+        "- Attached: `repo/` (full working tree; `.git` metadata excluded when using git)",
+    ]
+    if stats:
+        file_count, total_bytes = stats
+        lines.append(f"- Files: {file_count:,}")
+        lines.append(f"- Size: {total_bytes / (1024 * 1024):.1f} MiB")
+    return repo_dir, "\n".join(lines).strip() + "\n"
+
+
+def _git_checkout_repo_at_sha(
+    *,
+    repo_dir: Path,
+    repo_full_name: str,
+    head_sha: str,
+    token: str,
+) -> None:
+    git = shutil.which("git")
+    if not git:
+        raise RuntimeError("git is not installed or not on PATH")
+
+    remote_url = f"https://x-access-token@github.com/{repo_full_name}.git"
+    askpass_path = repo_dir.parent / "git_askpass.sh"
+    askpass_path.write_text(
+        "#!/bin/sh\n"
+        'exec printf "%s" "${GITHUB_TOKEN:-}"\n',
+        encoding="utf-8",
+    )
+    askpass_path.chmod(0o700)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "GIT_ASKPASS": str(askpass_path),
+            "GIT_TERMINAL_PROMPT": "0",
+            "GITHUB_TOKEN": token,
+            "GIT_LFS_SKIP_SMUDGE": "1",
+        }
+    )
+
+    def run(args: list[str]) -> None:
+        proc = subprocess.run(
+            args,
+            cwd=repo_dir,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            stderr = (proc.stderr or "").strip()
+            raise RuntimeError(stderr or f"git failed: {' '.join(args[:2])}")
+
+    run([git, "init", "-q"])
+    run([git, "remote", "add", "origin", remote_url])
+    run([git, "fetch", "--depth", "1", "--no-tags", "origin", head_sha])
+    run([git, "checkout", "--detach", "FETCH_HEAD"])
+
+    shutil.rmtree(repo_dir / ".git", ignore_errors=True)
+    try:
+        askpass_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _download_and_extract_zipball(
+    *,
+    repo_dir: Path,
+    repo_full_name: str,
+    head_sha: str,
+    token: str,
+    max_total_bytes: int = 512 * 1024 * 1024,
+) -> None:
+    zip_path = repo_dir.parent / "repo.zip"
+    github.download_repository_zipball(
+        repo_full_name=repo_full_name,
+        ref=head_sha,
+        token=token,
+        dest_path=zip_path,
+    )
+    _extract_zipball_to_repo_dir(
+        zip_path=zip_path,
+        repo_dir=repo_dir,
+        max_total_bytes=max_total_bytes,
+    )
+    try:
+        zip_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _extract_zipball_to_repo_dir(
+    *,
+    zip_path: Path,
+    repo_dir: Path,
+    max_total_bytes: int,
+) -> None:
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    repo_dir_resolved = repo_dir.resolve()
+
+    extracted_bytes = 0
+    with zipfile.ZipFile(zip_path) as zf:
+        names = [name for name in zf.namelist() if name and not name.endswith("/")]
+        prefix = ""
+        if names:
+            first = names[0].split("/", 1)[0]
+            if first and all(name.startswith(first + "/") for name in names):
+                prefix = first + "/"
+
+        for info in zf.infolist():
+            name = (info.filename or "").replace("\\", "/")
+            if not name or name.endswith("/"):
+                continue
+            if prefix and name.startswith(prefix):
+                rel_name = name[len(prefix) :]
+            else:
+                rel_name = name
+            rel_name = rel_name.lstrip("/")
+            if not rel_name:
+                continue
+
+            extracted_bytes += int(getattr(info, "file_size", 0) or 0)
+            if extracted_bytes > max_total_bytes:
+                break
+
+            target = (repo_dir / rel_name).resolve()
+            if not target.is_relative_to(repo_dir_resolved):
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info, "r") as src, target.open("wb") as dst:
+                shutil.copyfileobj(src, dst)
+
+
+def _repo_stats(*, repo_dir: Path) -> tuple[int, int] | None:
+    try:
+        file_count = 0
+        total_bytes = 0
+        for root, _dirs, files in os.walk(repo_dir):
+            root_path = Path(root)
+            for name in files:
+                path = root_path / name
+                try:
+                    st = path.stat()
+                except FileNotFoundError:
+                    continue
+                if not path.is_file():
+                    continue
+                file_count += 1
+                total_bytes += int(st.st_size or 0)
+        return file_count, total_bytes
+    except Exception:
+        return None

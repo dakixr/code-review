@@ -287,8 +287,13 @@ class ChatResponseTaskTest(TestCase):
             captured["env"] = env
             return OpenCodeResult(text="Here is a contextual answer.")
 
+        def fake_prepare_repo_snapshot(*, tmp_path: Path, **_kwargs):
+            repo_dir = tmp_path / "repo"
+            repo_dir.mkdir(parents=True, exist_ok=True)
+            (repo_dir / "README.md").write_text("# Repo\n", encoding="utf-8")
+            return repo_dir, "# Repository snapshot\n\n- ok\n"
+
         fake_post = MagicMock(return_value=999)
-        fake_update = MagicMock()
 
         with (
             patch(
@@ -300,7 +305,6 @@ class ChatResponseTaskTest(TestCase):
                 ),
             ),
             patch("web.tasks.github.post_issue_comment", fake_post),
-            patch("web.tasks.github.update_issue_comment", fake_update),
             patch("web.tasks.github.get_installation_token", return_value="tok"),
             patch(
                 "web.tasks.github.fetch_pull_request_json",
@@ -315,12 +319,8 @@ class ChatResponseTaskTest(TestCase):
                 return_value="diff --git a/a b/a\n",
             ),
             patch(
-                "web.tasks.github.list_pull_request_files",
-                return_value=[{"filename": "README.md", "status": "modified"}],
-            ),
-            patch(
-                "web.tasks.github.fetch_repository_file_text",
-                return_value="# Repo\n\nHello\n",
+                "web.tasks._prepare_repo_snapshot",
+                side_effect=fake_prepare_repo_snapshot,
             ),
             patch("web.tasks.run_opencode", side_effect=fake_run_opencode),
         ):
@@ -330,7 +330,6 @@ class ChatResponseTaskTest(TestCase):
             )
 
         assert fake_post.called
-        assert fake_update.called
         assert "double-check auth edge cases" in str(captured["message"])
         assert "@codereview can you" not in str(captured["message"]).lower()
 
@@ -341,6 +340,8 @@ class ChatResponseTaskTest(TestCase):
         assert "pull_request.diff" in file_names
         assert "latest_review_summary.md" in file_names
         assert "pull_request.md" in file_names
+        assert "repo_snapshot.md" in file_names
+        assert "repo" in file_names
 
         assert ChatMessage.objects.filter(
             pull_request=self.pull_request,

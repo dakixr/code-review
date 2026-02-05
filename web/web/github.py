@@ -109,6 +109,30 @@ def post_issue_comment(
         return response.json()["id"]
 
 
+def add_reaction_to_issue_comment(
+    *,
+    installation_id: int,
+    auth: GithubAppAuth,
+    repo_full_name: str,
+    comment_id: int,
+    content: str,
+) -> None:
+    """Add a reaction to an issue comment (e.g. content='eyes')."""
+    token = get_installation_token(installation_id, auth)
+    url = f"https://api.github.com/repos/{repo_full_name}/issues/comments/{comment_id}/reactions"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    with httpx.Client(timeout=20) as client:
+        response = client.post(url, headers=headers, json={"content": content})
+        # GitHub returns 422 if the same user already reacted with this content.
+        if response.status_code == 422:
+            return
+        response.raise_for_status()
+
+
 def update_issue_comment(
     installation_id: int,
     auth: GithubAppAuth,
@@ -347,3 +371,37 @@ def list_installation_repositories(
                 break
             page += 1
     return repos
+
+
+def download_repository_zipball(
+    *,
+    repo_full_name: str,
+    ref: str,
+    token: str,
+    dest_path: Path,
+    timeout_seconds: float = 120,
+) -> None:
+    """Download a repository zipball at a given ref to `dest_path`.
+
+    Args:
+        repo_full_name: "owner/name".
+        ref: A commit SHA, tag, or branch name.
+        token: Installation access token.
+        dest_path: Where to write the zip file.
+        timeout_seconds: Total request timeout.
+    """
+    url = f"https://api.github.com/repos/{repo_full_name}/zipball/{ref}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    with httpx.Client(
+        timeout=timeout_seconds,
+        follow_redirects=True,
+    ) as client:
+        with client.stream("GET", url, headers=headers) as response:
+            response.raise_for_status()
+            with dest_path.open("wb") as handle:
+                for chunk in response.iter_bytes():
+                    handle.write(chunk)

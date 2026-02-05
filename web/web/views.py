@@ -7,19 +7,31 @@ from datetime import datetime, timedelta
 from typing import Iterable, cast
 from uuid import UUID
 
+from components.ui._types import AlertVariant
+from components.ui.alert import alert
+from components.ui.badge import badge_count, badge_status
+from components.ui.button import button_component
+from components.ui.card import card
+from components.ui.form import form_component, form_field
+from components.ui.input import input_component
+from components.ui.navbar import navbar
+from components.ui.section import section_block, section_header
+from components.ui.table import table_component
+from components.ui.textarea import textarea_component
+from components.ui.theme_toggle import theme_toggle
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.messages.storage.base import Message
 from django.contrib.auth import authenticate
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
+from django.contrib.messages.storage.base import Message
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import redirect
 from django.templatetags.static import static
-from django.utils.html import escape
 from django.utils import timezone
+from django.utils.html import escape
 from django.utils.timezone import localtime
 from django.views.decorators.csrf import csrf_exempt
 from htpy import (
@@ -49,19 +61,6 @@ from htpy import (
     ul,
 )
 from htpy import input as input_el
-
-from components.ui._types import AlertVariant
-from components.ui.alert import alert
-from components.ui.button import button_component
-from components.ui.card import card
-from components.ui.badge import badge_count, badge_status
-from components.ui.form import form_component, form_field
-from components.ui.input import input_component
-from components.ui.navbar import navbar
-from components.ui.section import section_block, section_header
-from components.ui.table import table_component
-from components.ui.textarea import textarea_component
-from components.ui.theme_toggle import theme_toggle
 
 from . import github
 from .github import parse_webhook_body, verify_webhook_signature
@@ -317,7 +316,7 @@ def home(request: HttpRequest) -> HttpResponse:
     runtime_flow = div(class_="grid gap-6 md:grid-cols-3")[
         card(title="4. Webhook ingestion", description="PR + comment events")[
             p(class_="text-sm text-muted-foreground")[
-                "GitHub calls a per-app webhook URL. We verify the signature using the app’s webhook secret."
+                "GitHub calls a per-app webhook URL. We verify the signature using the app's webhook secret."
             ]
         ],
         card(title="5. Background review", description="Celery worker + OpenCode")[
@@ -1677,6 +1676,25 @@ def _github_webhook_impl(
                     ("/ai like", "/ai dislike", "/ai ignore")
                 )
                 should_respond = ("@codereview" in normalized) and not is_feedback
+                if should_respond:
+                    try:
+                        comment_id = int(payload["comment"]["id"])
+                        repository = pull_request.repository
+                        installation = repository.installation
+                        auth = github.auth_for_installation(installation)
+                        github.add_reaction_to_issue_comment(
+                            installation_id=installation.installation_id,
+                            auth=auth,
+                            repo_full_name=repository.full_name,
+                            comment_id=comment_id,
+                            content="eyes",
+                        )
+                    except Exception:
+                        logger.exception(
+                            "github_webhook.react_failed delivery=%s app_uuid=%s",
+                            request.headers.get("X-GitHub-Delivery", ""),
+                            str(getattr(github_app, "uuid", "")),
+                        )
                 record_chat_message(
                     pull_request,
                     payload["comment"],
