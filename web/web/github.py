@@ -183,8 +183,9 @@ def fetch_pull_request_diff(
     auth: GithubAppAuth,
     repo_full_name: str,
     pull_number: int,
+    token: str | None = None,
 ) -> str:
-    token = get_installation_token(installation_id, auth)
+    token = token or get_installation_token(installation_id, auth)
     url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}"
     headers = {
         "Authorization": f"token {token}",
@@ -194,6 +195,124 @@ def fetch_pull_request_diff(
         response = client.get(url, headers=headers)
         response.raise_for_status()
         return response.text
+
+
+def fetch_pull_request_json(
+    *,
+    installation_id: int,
+    auth: GithubAppAuth,
+    repo_full_name: str,
+    pull_number: int,
+    token: str | None = None,
+) -> dict:
+    """Fetch pull request metadata as JSON."""
+    token = token or get_installation_token(installation_id, auth)
+    url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    with httpx.Client(timeout=40) as client:
+        response = client.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+
+def list_pull_request_files(
+    *,
+    installation_id: int,
+    auth: GithubAppAuth,
+    repo_full_name: str,
+    pull_number: int,
+    limit: int = 200,
+    token: str | None = None,
+) -> list[dict]:
+    """List files changed in a pull request."""
+    token = token or get_installation_token(installation_id, auth)
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    files: list[dict] = []
+    page = 1
+    per_page = 100
+    with httpx.Client(timeout=40) as client:
+        while len(files) < limit:
+            url = (
+                f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}/files"
+                f"?per_page={per_page}&page={page}"
+            )
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            batch = response.json()
+            if not isinstance(batch, list) or not batch:
+                break
+            for item in batch:
+                if isinstance(item, dict):
+                    files.append(item)
+                    if len(files) >= limit:
+                        break
+            if len(batch) < per_page:
+                break
+            page += 1
+    return files
+
+
+def fetch_repository_file_text(
+    *,
+    installation_id: int,
+    auth: GithubAppAuth,
+    repo_full_name: str,
+    path: str,
+    ref: str,
+    max_bytes: int = 200_000,
+    token: str | None = None,
+) -> str | None:
+    """Fetch a repository file at a specific ref and decode it as UTF-8 text.
+
+    Returns None if the path is not a regular file or is too large / not decodable.
+    """
+    token = token or get_installation_token(installation_id, auth)
+    url = f"https://api.github.com/repos/{repo_full_name}/contents/{path}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    params = {"ref": ref}
+    with httpx.Client(timeout=40) as client:
+        response = client.get(url, headers=headers, params=params)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            return None
+        if data.get("type") != "file":
+            return None
+
+        size = data.get("size")
+        if isinstance(size, int) and size > max_bytes:
+            return None
+
+        encoded = data.get("content")
+        encoding = data.get("encoding")
+        if not isinstance(encoded, str) or encoding != "base64":
+            return None
+
+        try:
+            raw = base64.b64decode(encoded, validate=False)
+        except Exception:
+            return None
+        if len(raw) > max_bytes:
+            return None
+        if b"\x00" in raw:
+            return None
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
 
 
 def list_installation_repositories(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -11,13 +12,17 @@ from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.utils import timezone
 
 from .models import (
+    ChatMessage,
     GithubApp,
     GithubInstallation,
     GithubRepository,
     PullRequest,
+    ReviewComment,
     ReviewRun,
+    UserApiKey,
 )
 from .opencode_client import _format_opencode_start_error, run_opencode
+from .tasks import handle_chat_response_v2
 from .views import _flash_messages
 
 
@@ -204,3 +209,140 @@ class OpenCodeClientTest(SimpleTestCase):
         assert "--file" in captured_args
         assert "--" in captured_args
         assert captured_args.index("--") < captured_args.index("hello world")
+
+
+class ChatResponseTaskTest(TestCase):
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.github_app = GithubApp.objects.create(
+            owner=self.user,
+            desired_name="Alice App",
+            status=GithubApp.STATUS_READY,
+            slug="alice-app",
+        )
+        self.installation = GithubInstallation.objects.create(
+            github_app=self.github_app,
+            installation_id=123,
+            account_login="alice-org",
+            account_type="Organization",
+            target_type="Organization",
+            permissions={},
+            events=[],
+            is_active=True,
+        )
+        self.repo = GithubRepository.objects.create(
+            installation=self.installation,
+            full_name="alice-org/repo",
+            repo_id=99,
+            html_url="https://github.com/alice-org/repo",
+            private=False,
+            default_branch="main",
+            is_active=True,
+        )
+        self.pull_request = PullRequest.objects.create(
+            repository=self.repo,
+            pr_number=1,
+            pr_id=111,
+            title="Test PR",
+            state="open",
+            html_url="https://github.com/alice-org/repo/pull/1",
+            last_reviewed_sha="",
+            created_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        self.chat_message = ChatMessage.objects.create(
+            pull_request=self.pull_request,
+            author="alice",
+            body="@codereview can you double-check auth edge cases?",
+            github_comment_id=555,
+        )
+        self.review_run = ReviewRun.objects.create(
+            pull_request=self.pull_request,
+            head_sha="abcdef1234567890",
+            status=ReviewRun.STATUS_DONE,
+            summary="review summary",
+        )
+        ReviewComment.objects.create(
+            review_run=self.review_run,
+            body="Automated review content",
+            github_comment_id=777,
+        )
+        UserApiKey.objects.create(
+            user=self.user,
+            provider=UserApiKey.PROVIDER_ZAI,
+            api_key="test-key",
+            is_active=True,
+        )
+
+    def test_handle_chat_response_v2_uses_pr_and_conversation_context(self) -> None:
+        from .github import GithubAppAuth
+        from .opencode_client import OpenCodeResult
+
+        captured: dict[str, object] = {}
+
+        def fake_run_opencode(*, message: str, files: list[Path] | None, env: dict):
+            captured["message"] = message
+            captured["files"] = files or []
+            captured["env"] = env
+            return OpenCodeResult(text="Here is a contextual answer.")
+
+        fake_post = MagicMock(return_value=999)
+        fake_update = MagicMock()
+
+        with (
+            patch(
+                "web.tasks.github.auth_for_installation",
+                return_value=GithubAppAuth(
+                    app_id="1",
+                    private_key_pem="x",
+                    webhook_secret="y",
+                ),
+            ),
+            patch("web.tasks.github.post_issue_comment", fake_post),
+            patch("web.tasks.github.update_issue_comment", fake_update),
+            patch("web.tasks.github.get_installation_token", return_value="tok"),
+            patch(
+                "web.tasks.github.fetch_pull_request_json",
+                return_value={
+                    "head": {"sha": "deadbeef", "ref": "feature"},
+                    "base": {"ref": "main"},
+                    "body": "PR description",
+                },
+            ),
+            patch(
+                "web.tasks.github.fetch_pull_request_diff",
+                return_value="diff --git a/a b/a\n",
+            ),
+            patch(
+                "web.tasks.github.list_pull_request_files",
+                return_value=[{"filename": "README.md", "status": "modified"}],
+            ),
+            patch(
+                "web.tasks.github.fetch_repository_file_text",
+                return_value="# Repo\n\nHello\n",
+            ),
+            patch("web.tasks.run_opencode", side_effect=fake_run_opencode),
+        ):
+            handle_chat_response_v2(
+                pull_request_id=self.pull_request.id,
+                chat_message_id=self.chat_message.id,
+            )
+
+        assert fake_post.called
+        assert fake_update.called
+        assert "double-check auth edge cases" in str(captured["message"])
+        assert "@codereview can you" not in str(captured["message"]).lower()
+
+        files = captured["files"]
+        assert isinstance(files, list)
+        file_names = [Path(p).name for p in files]
+        assert "conversation.md" in file_names
+        assert "pull_request.diff" in file_names
+        assert "latest_review_summary.md" in file_names
+        assert "pull_request.md" in file_names
+
+        assert ChatMessage.objects.filter(
+            pull_request=self.pull_request,
+            github_comment_id=999,
+            author="codereview",
+        ).exists()

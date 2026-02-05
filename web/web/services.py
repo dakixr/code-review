@@ -17,7 +17,7 @@ from .models import (
     ReviewRun,
 )
 
-from .tasks import handle_chat_response, run_pr_review
+from .tasks import handle_chat_response_v2, run_pr_review
 
 logger = logging.getLogger(__name__)
 
@@ -145,5 +145,5 @@ def record_chat_message(
         github_comment_id=payload.get("id"),
     )
     if respond:
-        cast(Task, handle_chat_response).delay(pull_request.id, message.body)
+        cast(Task, handle_chat_response_v2).delay(pull_request.id, message.id)
     return message
