@@ -20,7 +20,7 @@ This web app is the control plane:
 - Celery for background jobs (webhook ingestion → review tasks).
 - Redis as Celery broker.
 - WhiteNoise + `collectstatic` for production static serving.
-- OpenCode installed in the image with default model `zai/glm-4.7` (see `web/opencode.json`).
+- OpenCode installed in the image with default model `zai/glm-4.7` (see `web/opencode.json`). Note: the upstream OpenCode image is Alpine/musl, so the Dockerfile copies the musl loader + runtime libs into the Debian-based runtime image so `opencode` can execute.
 - `pyjwt[crypto]` (Cryptography) for GitHub App JWT signing (RS256).
 
 ## GitHub Comment API (MVP)

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.messages.middleware import MessageMiddleware
@@ -14,6 +17,7 @@ from .models import (
     PullRequest,
     ReviewRun,
 )
+from .opencode_client import _format_opencode_start_error, run_opencode
 from .views import _flash_messages
 
 
@@ -111,3 +115,47 @@ class ReviewRunVisibilityTest(TestCase):
         self.client.force_login(self.other_user)
         resp = self.client.get(f"/app/review-runs/{self.review_run.id}")
         assert resp.status_code == 404
+
+
+class OpenCodeClientTest(SimpleTestCase):
+    def test_missing_binary_raises_actionable_error(self) -> None:
+        try:
+            run_opencode(
+                message="hello",
+                env={
+                    "OPENCODE_BIN": "/definitely-not-a-real-path/opencode",
+                    "PATH": "",
+                },
+            )
+        except RuntimeError as e:
+            message = str(e)
+            assert "OpenCode binary not found" in message
+            assert "OPENCODE_BIN" in message
+        else:
+            raise AssertionError("Expected RuntimeError")
+
+    def test_script_missing_interpreter_includes_hint(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codereview-test-") as tmpdir:
+            script_path = Path(tmpdir) / "opencode"
+            script_path.write_text("#!/does/not/exist\n", encoding="utf-8")
+            script_path.chmod(0o755)
+
+            try:
+                run_opencode(
+                    message="hello",
+                    env={"OPENCODE_BIN": str(script_path), "PATH": ""},
+                )
+            except RuntimeError as e:
+                assert "interpreter may be missing" in str(e)
+            else:
+                raise AssertionError("Expected RuntimeError")
+
+    def test_musl_linked_binary_message_hint(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codereview-test-") as tmpdir:
+            fake_bin = Path(tmpdir) / "opencode"
+            fake_bin.write_bytes(b"\x7fELF.... /lib/ld-musl-x86_64.so.1 ...")
+            message = _format_opencode_start_error(
+                opencode_bin=str(fake_bin),
+                merged_env={"PATH": ""},
+            )
+            assert "musl-linked" in message

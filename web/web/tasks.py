@@ -169,7 +169,10 @@ def run_pr_review(review_run_id: int) -> None:
         body = (
             "❌ Review failed.\n\n"
             f"Error: `{error_text}`\n\n"
-            "If this is an API key issue, set it at Account → API Keys."
+            "Troubleshooting:\n"
+            "- If this is an API key issue, set it at Account → API Keys.\n"
+            "- If this is an OpenCode install/runtime issue, ensure `opencode` is "
+            "present and runnable in the worker image."
         )
         try:
             github.update_issue_comment(

@@ -41,6 +41,12 @@ COPY --from=css-builder /app/staticfiles/css/output.css /app/staticfiles/css/out
 RUN rm -f /app/staticfiles/css/input.css
 
 COPY --from=opencode /usr/local/bin/opencode /usr/local/bin/opencode
+# The upstream OpenCode image is Alpine (musl). Copy its runtime loader + C++ runtime
+# so the `opencode` binary can execute on Debian-based Python images.
+COPY --from=opencode /lib/ld-musl-*.so.1 /lib/
+COPY --from=opencode /lib/libc.musl-*.so.1 /lib/
+COPY --from=opencode /usr/lib/libgcc_s.so.1 /usr/lib/
+COPY --from=opencode /usr/lib/libstdc++.so.6* /usr/lib/
 RUN mkdir -p /root/.config/opencode && cp /app/opencode.json /root/.config/opencode/opencode.json
 
 ENV PATH="/opt/venv/bin:$PATH"

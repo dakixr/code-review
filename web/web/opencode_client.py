@@ -13,6 +13,66 @@ class OpenCodeResult:
     text: str
 
 
+def _resolve_opencode_bin(*, merged_env: dict[str, str], configured_bin: str) -> str:
+    candidates = [configured_bin]
+    if configured_bin == "opencode":
+        candidates.extend(
+            [
+                "/usr/local/bin/opencode",
+                "/usr/bin/opencode",
+            ]
+        )
+
+    for candidate in candidates:
+        if "/" in candidate:
+            path = Path(candidate)
+            if path.is_file() and os.access(path, os.X_OK):
+                return candidate
+            continue
+
+        resolved = which(candidate, path=merged_env.get("PATH"))
+        if resolved:
+            return resolved
+
+    raise RuntimeError(
+        "OpenCode binary not found. Set OPENCODE_BIN or ensure it is installed "
+        f"and on PATH. PATH={merged_env.get('PATH', '')!r}"
+    )
+
+
+def _format_opencode_start_error(
+    *, opencode_bin: str, merged_env: dict[str, str]
+) -> str:
+    message = (
+        "OpenCode executable could not be started. "
+        f"Tried {opencode_bin!r}. PATH={merged_env.get('PATH', '')!r}"
+    )
+
+    path = Path(opencode_bin)
+    if not path.exists():
+        return message
+
+    try:
+        head = path.read_bytes()[:8192]
+    except Exception:
+        return message
+
+    if head.startswith(b"#!"):
+        first_line = head.splitlines()[0][2:].decode("utf-8", errors="replace").strip()
+        return (
+            f"{message} (The opencode entrypoint is a script; its interpreter "
+            f"may be missing: {first_line!r}.)"
+        )
+
+    if b"ld-musl" in head:
+        return (
+            f"{message} (This opencode binary appears to be musl-linked; "
+            "ensure musl is installed in the runtime image.)"
+        )
+
+    return message
+
+
 def run_opencode(
     *, message: str, files: list[Path] | None = None, env: dict[str, str]
 ) -> OpenCodeResult:
@@ -32,32 +92,10 @@ def run_opencode(
     configured_bin = (
         env.get("OPENCODE_BIN") or os.getenv("OPENCODE_BIN", "") or "opencode"
     )
-    candidates = [configured_bin]
-    if configured_bin == "opencode":
-        candidates.extend(
-            [
-                "/usr/local/bin/opencode",
-                "/usr/bin/opencode",
-            ]
-        )
-
-    opencode_bin: str | None = None
-    for candidate in candidates:
-        if "/" in candidate:
-            if Path(candidate).exists():
-                opencode_bin = candidate
-                break
-            continue
-        resolved = which(candidate, path=merged_env.get("PATH"))
-        if resolved:
-            opencode_bin = resolved
-            break
-
-    if not opencode_bin:
-        raise RuntimeError(
-            "OpenCode binary not found. Set OPENCODE_BIN or ensure it is installed "
-            f"and on PATH. PATH={merged_env.get('PATH', '')!r}"
-        )
+    opencode_bin = _resolve_opencode_bin(
+        merged_env=merged_env,
+        configured_bin=configured_bin,
+    )
 
     args = [opencode_bin, "run", "--format", "json"]
     for file_path in files or []:
@@ -74,8 +112,9 @@ def run_opencode(
         )
     except FileNotFoundError as e:
         raise RuntimeError(
-            "OpenCode executable could not be started. "
-            f"Tried {opencode_bin!r}. PATH={merged_env.get('PATH', '')!r}"
+            _format_opencode_start_error(
+                opencode_bin=opencode_bin, merged_env=merged_env
+            )
         ) from e
 
     # OpenCode emits line-delimited JSON events on stdout in `--format json` mode.
