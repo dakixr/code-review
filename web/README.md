@@ -35,15 +35,6 @@ This app is designed to be driven from PR comments.
   - `/ai dislike` — the last review was not helpful
   - `/ai ignore` — ignore the last review’s guidance for this repo
 
-## Troubleshooting
-
-### Review failed: `No such file or directory: 'opencode'`
-
-This means the worker container cannot find the OpenCode binary on `PATH`.
-
-- Ensure the worker uses the same image build as the web container (the provided `Dockerfile` copies `opencode` into `/usr/local/bin/opencode`).
-- If your platform overwrites `PATH`, set `OPENCODE_BIN=/usr/local/bin/opencode`.
-
 ## Local Setup
 
 Run commands from the `web/` directory.
@@ -97,5 +88,3 @@ This project uses the **GitHub App Manifest** flow (Coolify-style):
 4. After GitHub creates the app, install it on an org/repo.
 
 API keys (e.g. `zai` for GLM) are stored **per user in the database** and will be injected into background review jobs as needed (not committed as env vars).
-
-Hi! hi again!

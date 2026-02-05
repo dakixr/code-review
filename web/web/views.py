@@ -27,6 +27,7 @@ from htpy import (
     Renderable,
     a,
     body,
+    details,
     div,
     h1,
     h2,
@@ -43,6 +44,7 @@ from htpy import (
     select,
     span,
     strong,
+    summary,
     title,
     ul,
 )
@@ -106,6 +108,46 @@ def _format_datetime(value: datetime | None) -> str:
     if not value:
         return "—"
     return localtime(value).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _mark_stale_review_runs(*, owner: User, now: datetime) -> int:
+    stale_queued_before = now - timedelta(hours=1)
+    stale_running_before = now - timedelta(hours=2)
+
+    base = ReviewRun.objects.filter(
+        pull_request__repository__installation__github_app__owner=owner,
+    )
+
+    stale_queued = base.filter(
+        status=ReviewRun.STATUS_QUEUED,
+        created_at__lt=stale_queued_before,
+    ).update(
+        status=ReviewRun.STATUS_FAILED,
+        finished_at=now,
+        error_message="Marked stale: queued > 1h (worker may be down).",
+    )
+
+    stale_running = base.filter(
+        status=ReviewRun.STATUS_RUNNING,
+        started_at__isnull=False,
+        started_at__lt=stale_running_before,
+    ).update(
+        status=ReviewRun.STATUS_FAILED,
+        finished_at=now,
+        error_message="Marked stale: running > 2h (worker may have crashed).",
+    )
+
+    stale_running_no_start = base.filter(
+        status=ReviewRun.STATUS_RUNNING,
+        started_at__isnull=True,
+        created_at__lt=stale_running_before,
+    ).update(
+        status=ReviewRun.STATUS_FAILED,
+        finished_at=now,
+        error_message="Marked stale: running > 2h (missing start time).",
+    )
+
+    return int(stale_queued) + int(stale_running) + int(stale_running_no_start)
 
 
 def render_htpy(content: Renderable) -> HttpResponse:
@@ -405,6 +447,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         ]
         return layout(request, content, page_title="Dashboard")
 
+    now = timezone.now()
+    _mark_stale_review_runs(owner=cast(User, request.user), now=now)
+
     github_apps = (
         GithubApp.objects.filter(owner=request.user).order_by("-updated_at").all()
     )
@@ -443,20 +488,53 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         )
         installation_list: list[Renderable] = []
         for installation in installations:
+            active_repos = list(
+                installation.repositories.filter(is_active=True)
+                .order_by("full_name")
+                .values_list("full_name", flat=True)
+            )
+            repo_limit = 10
+            visible_repos = active_repos[:repo_limit]
+            hidden_count = max(0, len(active_repos) - len(visible_repos))
+
             repos = [
-                li(class_="text-sm text-muted-foreground")[repo.full_name]
-                for repo in installation.repositories.filter(is_active=True).all()
+                li(class_="text-sm text-muted-foreground")[name]
+                for name in visible_repos
             ]
+            more_repos: Renderable | None = None
+            if hidden_count:
+                more_repos = details(class_="pt-2")[
+                    summary(
+                        class_="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    )[f"Show {hidden_count} more repositories"],
+                    div(class_="pt-2 max-h-64 overflow-y-auto")[
+                        ul(class_="space-y-1")[
+                            *[
+                                li(class_="text-sm text-muted-foreground")[name]
+                                for name in active_repos
+                            ]
+                        ]
+                    ],
+                ]
             installation_list.append(
                 card(
                     title=installation.account_login or "Installation",
                     description=f"Installation ID: {installation.installation_id}",
                 )[
+                    div(class_="flex flex-wrap items-center gap-2")[
+                        span(class_="text-xs text-muted-foreground")["Repositories"],
+                        badge_count(
+                            len(active_repos),
+                            cap=999,
+                            variant="secondary",
+                        ),
+                    ],
                     ul(class_="space-y-1")[*repos]
                     if repos
                     else p(class_="text-sm text-muted-foreground")[
                         "No repositories installed yet."
-                    ]
+                    ],
+                    more_repos if more_repos else span(),
                 ]
             )
 
@@ -481,7 +559,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             ]
         )
 
-    since = timezone.now() - timedelta(days=7)
+    since = now - timedelta(days=7)
     recent_runs = (
         ReviewRun.objects.select_related("pull_request__repository")
         .filter(pull_request__repository__installation__github_app__owner=request.user)
@@ -510,7 +588,16 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         run_rows.append(
             [
                 created,
-                escape(repo.full_name),
+                a(
+                    href=repo.html_url or "#",
+                    class_="text-sm text-muted-foreground hover:text-foreground transition-colors",
+                    target="_blank",
+                    rel="noreferrer",
+                )[
+                    span(class_="inline-block max-w-[18rem] truncate align-middle")[
+                        escape(repo.full_name)
+                    ]
+                ],
                 a(
                     href=pr.html_url,
                     class_="text-sm text-muted-foreground hover:text-foreground transition-colors",
@@ -557,8 +644,8 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         section_header(
             "Dashboard", subtitle="Manage installs and repo coverage.", align="left"
         ),
-        div(class_="grid gap-6 md:grid-cols-2")[*cards],
         ops_card,
+        div(class_="grid gap-6 md:grid-cols-2")[*cards],
     ]
 
     return layout(request, content, page_title="Dashboard")
@@ -582,6 +669,9 @@ def review_run_detail(request: HttpRequest, review_run_id: int) -> HttpResponse:
             ],
         ]
         return layout(request, content, page_title="Review run")
+
+    now = timezone.now()
+    _mark_stale_review_runs(owner=cast(User, request.user), now=now)
 
     try:
         review_run = ReviewRun.objects.select_related(
