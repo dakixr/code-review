@@ -100,6 +100,9 @@ def run_opencode(
     args = [opencode_bin, "run", "--format", "json"]
     for file_path in files or []:
         args.extend(["--file", str(file_path)])
+    # Important: `opencode run --file` takes an array value; without `--`,
+    # the message can be mis-parsed as an additional file argument.
+    args.append("--")
     args.append(message)
 
     try:

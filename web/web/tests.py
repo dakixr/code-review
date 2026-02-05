@@ -159,3 +159,48 @@ class OpenCodeClientTest(SimpleTestCase):
                 merged_env={"PATH": ""},
             )
             assert "musl-linked" in message
+
+    def test_invocation_separates_files_from_message(self) -> None:
+        captured_args: list[str] = []
+
+        def fake_run(
+            args: list[str],
+            *,
+            env: dict[str, str],
+            check: bool,
+            capture_output: bool,
+            text: bool,
+        ):
+            del env, check, capture_output, text
+            captured_args.extend(args)
+
+            class Result:
+                returncode = 0
+                stdout = (
+                    '{"type":"message","message":{"role":"assistant","content":"ok"}}\n'
+                )
+                stderr = ""
+
+            return Result()
+
+        with tempfile.TemporaryDirectory(prefix="codereview-test-") as tmpdir:
+            file_path = Path(tmpdir) / "pull_request.diff"
+            file_path.write_text("diff --git a/a b/a\n", encoding="utf-8")
+
+            from . import opencode_client as client
+
+            original_run = client.subprocess.run
+            client.subprocess.run = fake_run  # type: ignore[assignment]
+            try:
+                result = run_opencode(
+                    message="hello world",
+                    files=[file_path],
+                    env={"OPENCODE_BIN": "/bin/echo"},
+                )
+            finally:
+                client.subprocess.run = original_run  # type: ignore[assignment]
+
+        assert result.text == "ok"
+        assert "--file" in captured_args
+        assert "--" in captured_args
+        assert captured_args.index("--") < captured_args.index("hello world")
