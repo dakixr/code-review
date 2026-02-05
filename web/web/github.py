@@ -211,14 +211,105 @@ def fetch_pull_request_diff(
 ) -> str:
     token = token or get_installation_token(installation_id, auth)
     url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3.diff",
-    }
+    last_response: httpx.Response | None = None
     with httpx.Client(timeout=40) as client:
-        response = client.get(url, headers=headers)
-        response.raise_for_status()
-        return response.text
+        for accept in [
+            "application/vnd.github.v3.diff",
+            "application/vnd.github.v3.patch",
+        ]:
+            headers = {
+                "Authorization": f"token {token}",
+                "Accept": accept,
+                "X-GitHub-Api-Version": "2022-11-28",
+            }
+            response = client.get(url, headers=headers)
+            last_response = response
+            if response.status_code in {406, 415, 501}:
+                continue
+            response.raise_for_status()
+
+            content_type = (response.headers.get("content-type") or "").lower()
+            if "json" in content_type or response.text.lstrip().startswith("{"):
+                continue
+            return response.text
+
+    files = list_pull_request_files(
+        installation_id=installation_id,
+        auth=auth,
+        repo_full_name=repo_full_name,
+        pull_number=pull_number,
+        limit=500,
+        token=token,
+    )
+    diff_text = _render_pull_request_files_as_diff(files)
+    if diff_text.strip():
+        status_note = (
+            f"{last_response.status_code} {last_response.reason_phrase}"
+            if last_response is not None
+            else "unknown error"
+        )
+        return (
+            "NOTE: GitHub did not return a unified PR diff; "
+            f"falling back to per-file patches from `/pulls/{{pull_number}}/files` "
+            f"(last status: {status_note}).\n\n"
+            f"{diff_text}"
+        )
+
+    if last_response is not None:
+        last_response.raise_for_status()
+    raise RuntimeError("Failed to fetch pull request diff.")
+
+
+def _render_pull_request_files_as_diff(files: list[dict]) -> str:
+    parts: list[str] = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+
+        filename = item.get("filename")
+        if not isinstance(filename, str) or not filename:
+            continue
+
+        status = item.get("status")
+        status = status if isinstance(status, str) else "modified"
+
+        previous_filename = item.get("previous_filename")
+        previous_filename = (
+            previous_filename if isinstance(previous_filename, str) else ""
+        )
+
+        old_path = (
+            previous_filename if status == "renamed" and previous_filename else filename
+        )
+        new_path = filename
+
+        parts.append(f"diff --git a/{old_path} b/{new_path}")
+
+        if status == "renamed" and previous_filename:
+            parts.append(f"rename from {previous_filename}")
+            parts.append(f"rename to {filename}")
+
+        if status == "added":
+            parts.append("--- /dev/null")
+            parts.append(f"+++ b/{new_path}")
+        elif status == "removed":
+            parts.append(f"--- a/{old_path}")
+            parts.append("+++ /dev/null")
+        else:
+            parts.append(f"--- a/{old_path}")
+            parts.append(f"+++ b/{new_path}")
+
+        patch = item.get("patch")
+        if isinstance(patch, str) and patch.strip():
+            parts.append(patch.rstrip("\n"))
+        else:
+            parts.append(
+                "(no patch available for this file — possibly binary, renamed without changes, or too large)"
+            )
+
+        parts.append("")
+
+    return "\n".join(parts).rstrip() + "\n"
 
 
 def fetch_pull_request_json(

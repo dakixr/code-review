@@ -22,6 +22,7 @@ from .models import (
     ReviewRun,
     UserApiKey,
 )
+from . import github
 from .opencode_client import _format_opencode_start_error, run_opencode
 from .tasks import handle_chat_response_v2
 from .views import _flash_messages
@@ -437,3 +438,63 @@ class OpenCodeProbeCommandTest(TestCase):
             )
         assert "hello from model" in str(out)
         assert "hello from model" in stdout.getvalue()
+
+
+class GithubDiffFallbackTest(SimpleTestCase):
+    def test_fetch_pull_request_diff_falls_back_to_files_patches_on_406(self) -> None:
+        class FakeResponse:
+            def __init__(self, status_code: int, reason_phrase: str) -> None:
+                self.status_code = status_code
+                self.reason_phrase = reason_phrase
+                self.headers: dict[str, str] = {}
+                self.text = ""
+
+        class FakeClient:
+            def __init__(self, responses: list[FakeResponse]) -> None:
+                self._responses = responses
+
+            def __enter__(self) -> FakeClient:
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                del exc_type, exc, tb
+                return False
+
+            def get(self, url: str, *, headers: dict[str, str]) -> FakeResponse:
+                del url, headers
+                return self._responses.pop(0)
+
+        responses = [
+            FakeResponse(406, "Not Acceptable"),
+            FakeResponse(406, "Not Acceptable"),
+        ]
+
+        with (
+            patch.object(github.httpx, "Client", return_value=FakeClient(responses)),
+            patch.object(
+                github,
+                "list_pull_request_files",
+                return_value=[
+                    {
+                        "filename": "foo.py",
+                        "status": "modified",
+                        "patch": "@@ -1 +1 @@\n-print('a')\n+print('b')\n",
+                    }
+                ],
+            ),
+        ):
+            diff_text = github.fetch_pull_request_diff(
+                installation_id=1,
+                auth=github.GithubAppAuth(
+                    app_id="1",
+                    private_key_pem="pem",
+                    webhook_secret="secret",
+                ),
+                repo_full_name="owner/repo",
+                pull_number=8,
+                token="token",
+            )
+
+        assert "NOTE: GitHub did not return a unified PR diff" in diff_text
+        assert "diff --git a/foo.py b/foo.py" in diff_text
+        assert "@@ -1 +1 @@" in diff_text
