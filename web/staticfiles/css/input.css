@@ -1,5 +1,6 @@
 /* cspell:disable*/
 
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 @plugin 'tailwindcss-animate';
 @import "./theme.css";
@@ -13,7 +14,7 @@
     @apply scroll-smooth;
   }
   body {
-    @apply bg-background text-foreground overscroll-none antialiased text-sm;
+    @apply bg-background text-foreground overscroll-none antialiased text-sm font-sans;
   }
   .scrollbar {
     scrollbar-width: thin;

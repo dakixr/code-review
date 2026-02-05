@@ -14,6 +14,7 @@ from components.ui.button import button_component
 from components.ui.card import card
 from components.ui.form import form_component, form_field
 from components.ui.input import input_component
+from components.ui.lucide import lucide_auto_init_script, lucide_cdn_script, lucide_icon
 from components.ui.navbar import navbar
 from components.ui.section import section_block, section_header
 from components.ui.table import table_component
@@ -87,8 +88,10 @@ from .services import (
     upsert_repository,
 )
 
-PAGE_SHELL_CLASS = "min-h-screen bg-background text-foreground"
+PAGE_SHELL_CLASS = "min-h-screen bg-background text-foreground relative"
 CONTENT_CLASS = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+ANIMATE_STAGGER_CLASS = "animate-stagger"
+HERO_PATTERN_CLASS = "hero-pattern"
 
 logger = logging.getLogger(__name__)
 
@@ -173,29 +176,62 @@ def github_app_install_url(request: HttpRequest) -> str:
 
 def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpResponse:
     flash = _flash_messages(request)
+
+    # Logo with terminal-style accent
+    logo = a(href="/", class_="flex items-center gap-2.5 group")[
+        # Terminal icon
+        div(
+            class_="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center "
+            "group-hover:bg-primary/20 transition-colors"
+        )[
+            span(class_="text-primary font-mono font-bold text-sm")[">_"]
+        ],
+        span(class_="font-semibold text-foreground tracking-tight")["CodeReview"],
+        span(class_="text-primary font-medium")["AI"],
+    ]
+
+    # Navigation links with active state indicators
+    nav_links = div(class_="hidden md:flex items-center gap-1")[
+        a(
+            href="/app",
+            class_="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground "
+            "hover:bg-accent/50 rounded-md transition-all",
+        )["Dashboard"],
+        a(
+            href="/rules",
+            class_="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground "
+            "hover:bg-accent/50 rounded-md transition-all",
+        )["Rules"],
+        a(
+            href="/feedback",
+            class_="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground "
+            "hover:bg-accent/50 rounded-md transition-all",
+        )["Feedback"],
+        a(
+            href="/account",
+            class_="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground "
+            "hover:bg-accent/50 rounded-md transition-all",
+        )["Account"],
+    ]
+
+    # Right side actions
+    actions = div(class_="flex items-center gap-2")[
+        theme_toggle(),
+        a(
+            href=github_app_install_url(request),
+            class_="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs "
+            "font-medium text-primary-foreground bg-primary hover:bg-primary/90 "
+            "rounded-md transition-colors shadow-sm",
+        )[
+            span(class_="opacity-80")["Install"],
+            span["GitHub App"],
+        ],
+    ]
+
     top_nav = navbar(
-        left=a(href="/", class_="text-lg font-semibold text-foreground")[
-            "CodeReview AI"
-        ],
-        center=div(class_="flex items-center gap-6 text-sm text-muted-foreground")[
-            a(href="/app", class_="hover:text-foreground transition-colors")[
-                "Dashboard"
-            ],
-            a(href="/rules", class_="hover:text-foreground transition-colors")["Rules"],
-            a(href="/feedback", class_="hover:text-foreground transition-colors")[
-                "Feedback"
-            ],
-            a(href="/account", class_="hover:text-foreground transition-colors")[
-                "Account"
-            ],
-        ],
-        right=div(class_="flex items-center gap-3")[
-            theme_toggle(),
-            a(
-                href=github_app_install_url(request),
-                class_="text-xs text-muted-foreground hover:text-foreground",
-            )["Install GitHub App"],
-        ],
+        left=logo,
+        center=nav_links,
+        right=actions,
     )
 
     return render_htpy(
@@ -210,10 +246,19 @@ def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpRespo
                     defer=True,
                 ),
                 script(src="https://unpkg.com/htmx.org@1.9.12"),
+                lucide_cdn_script(),
             ],
             body(class_=PAGE_SHELL_CLASS)[
+                # Subtle background gradient
+                div(
+                    class_="fixed inset-0 -z-10 bg-gradient-to-br from-primary/[0.02] via-transparent to-accent/[0.02]"
+                ),
                 top_nav,
-                main(class_=f"py-10 {CONTENT_CLASS}")[flash, content],
+                main(class_=f"py-8 sm:py-12 {CONTENT_CLASS} animate-page-in")[
+                    flash, content
+                ],
+                # Initialize Lucide icons
+                lucide_auto_init_script(),
             ],
         ]
     )
@@ -221,205 +266,406 @@ def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpRespo
 
 def home(request: HttpRequest) -> HttpResponse:
     install_url = github_app_install_url(request)
-    hero_actions = div(class_="flex flex-wrap items-center gap-3")[
-        a(href=install_url)[button_component(variant="primary")["Install GitHub App"]],
-        a(href="/app")[button_component(variant="outline")["Go to dashboard"]],
-    ]
 
+    # Hero badges with subtle styling
     hero_badges = div(class_="flex flex-wrap gap-2")[
         span(
-            class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground"
-        )["GitHub App"],
+            class_="inline-flex items-center gap-1.5 rounded-full border border-border/50 "
+            "bg-background/80 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm"
+        )[
+            span(class_="w-1.5 h-1.5 rounded-full bg-success"),
+            "GitHub App",
+        ],
         span(
-            class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground"
+            class_="rounded-full border border-border/50 bg-background/80 px-3 py-1 "
+            "text-xs text-muted-foreground backdrop-blur-sm"
         )["Multi-user"],
         span(
-            class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground"
+            class_="rounded-full border border-border/50 bg-background/80 px-3 py-1 "
+            "text-xs text-muted-foreground font-mono backdrop-blur-sm"
         )["HTMX + htpy"],
         span(
-            class_="rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground"
+            class_="rounded-full border border-primary/30 bg-primary/5 px-3 py-1 "
+            "text-xs text-primary backdrop-blur-sm"
         )["Learns your taste"],
     ]
 
-    stats = div(class_="grid gap-4 sm:grid-cols-3")[
-        card(title="<10 sec", description="Time to first 👁 comment")[
-            p(class_="text-sm text-muted-foreground")["Immediate feedback on every PR."]
+    # Hero actions with improved styling
+    hero_actions = div(class_="flex flex-wrap items-center gap-3")[
+        a(href=install_url, class_="group")[
+            button_component(
+                variant="primary",
+                class_="shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-shadow",
+            )[
+                span["Install GitHub App"],
+                span(class_="ml-1 group-hover:translate-x-0.5 transition-transform")[
+                    "→"
+                ],
+            ]
         ],
-        card(title="Global + repo", description="Rule sets")[
-            p(class_="text-sm text-muted-foreground")["Tune once or per repo."]
-        ],
-        card(title="Feedback loop", description="Likes, ignore, dislike")[
-            p(class_="text-sm text-muted-foreground")["Signals train the reviewer."]
+        a(href="/app")[
+            button_component(variant="outline")["Go to dashboard"]
         ],
     ]
 
-    hero = section_block(tone="muted", class_="rounded-2xl border border-border/60")[
-        div(class_="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]")[
-            div(class_="grid gap-4")[
-                hero_badges,
-                h1(class_="text-4xl sm:text-5xl font-semibold tracking-tight")[
-                    "Automated PR reviews that learn your taste"
-                ],
-                p(class_="text-lg text-muted-foreground")[
-                    "Create your own GitHub App, install it on repos, and let the reviewer comment directly in PRs. Add per-user model API keys and tune rule sets globally or per repo."
-                ],
-                hero_actions,
-                div(class_="grid gap-2 text-sm text-muted-foreground")[
-                    strong(class_="text-foreground")["Works entirely from GitHub."],
-                    span[
-                        "The UI is a control plane for installs, rules, and ops — the conversation happens in PR comments."
-                    ],
-                ],
-            ],
-            card(title="Live review preview", description="GitHub comment thread")[
-                div(class_="grid gap-3 text-sm text-muted-foreground")[
-                    div(
-                        class_="rounded-lg border border-border/60 bg-background/70 p-3"
-                    )["👁 Reviewing this PR now. I'll post details shortly."],
-                    div(
-                        class_="rounded-lg border border-border/60 bg-background/70 p-3"
-                    )[
-                        '✅ Found 2 improvements. 1) Add a null guard on "user.email". 2) Consider caching the lint results.'
-                    ],
-                    div(
-                        class_="rounded-lg border border-border/60 bg-background/70 p-3"
-                    )["@codereview can you double-check the auth flow edge cases?"],
-                    div(
-                        class_="rounded-lg border border-border/60 bg-background/70 p-3"
-                    )["/ai like"],
-                ],
+    # Terminal-style preview card
+    terminal_preview = div(
+        class_="rounded-xl border border-border overflow-hidden bg-card shadow-xl shadow-black/5"
+    )[
+        # Terminal header
+        div(class_="terminal-header")[
+            span(class_="terminal-dot terminal-dot-red"),
+            span(class_="terminal-dot terminal-dot-yellow"),
+            span(class_="terminal-dot terminal-dot-green"),
+            span(class_="ml-3 text-xs text-muted-foreground font-mono")[
+                "PR #142 — Add user authentication"
             ],
         ],
-    ]
-
-    setup_flow = div(class_="grid gap-6 md:grid-cols-3")[
-        card(title="1. Create an account", description="Control plane access")[
-            p(class_="text-sm text-muted-foreground")[
-                "Each user brings their own GitHub App and AI provider keys."
-            ]
-        ],
-        card(
-            title="2. Create your GitHub App",
-            description="Manifest flow (Coolify-style)",
-        )[
-            p(class_="text-sm text-muted-foreground")[
-                "We redirect you to GitHub with a pre-filled App Manifest and store the app credentials on return."
-            ]
-        ],
-        card(title="3. Install the app", description="Org or repo install")[
-            p(class_="text-sm text-muted-foreground")[
-                "Choose which repos to grant access to so we can receive webhooks and fetch PR diffs."
-            ]
-        ],
-    ]
-
-    runtime_flow = div(class_="grid gap-6 md:grid-cols-3")[
-        card(title="4. Webhook ingestion", description="PR + comment events")[
-            p(class_="text-sm text-muted-foreground")[
-                "GitHub calls a per-app webhook URL. We verify the signature using the app's webhook secret."
-            ]
-        ],
-        card(title="5. Background review", description="Celery worker + OpenCode")[
-            p(class_="text-sm text-muted-foreground")[
-                "The worker fetches the PR diff via the GitHub API and runs OpenCode with your per-user model key."
-            ]
-        ],
-        card(title="6. GitHub-native loop", description="Comments + feedback")[
-            p(class_="text-sm text-muted-foreground")[
-                "A placeholder 👁 comment is posted immediately, then edited with the full review. Mention @codereview for on-demand help; use /ai like, /ai dislike, /ai ignore as feedback signals."
-            ]
-        ],
-    ]
-
-    features = div(class_="grid gap-6 md:grid-cols-3")[
-        card(title="Auto review", description="Runs on PR open or sync.")[
-            p(class_="text-sm text-muted-foreground")[
-                "A live status comment starts with 👁 and updates when ready."
-            ]
-        ],
-        card(title="Learns you", description="Records feedback.")[
-            p(class_="text-sm text-muted-foreground")[
-                "Capture likes, dislikes, and ignore signals to tighten reviews."
-            ]
-        ],
-        card(title="Configurable", description="Global + repo rules.")[
-            p(class_="text-sm text-muted-foreground")[
-                "Tune instruction sets per repo without editing config files."
-            ]
-        ],
-    ]
-
-    architecture = div(class_="grid gap-6 md:grid-cols-2")[
-        card(title="Control plane (this UI)", description="Django + HTMX + htpy")[
-            ul(class_="space-y-1 text-sm text-muted-foreground")[
-                li["Manage your GitHub App + installation status."],
-                li["Create global and per-repo rule sets."],
-                li["Store per-user AI provider API keys (no env vars)."],
-            ]
-        ],
-        card(title="Data plane", description="Webhook → queue → review")[
-            ul(class_="space-y-1 text-sm text-muted-foreground")[
-                li["Webhook endpoint validates per-app signatures."],
-                li["Celery job fetches PR diff and generates a review."],
-                li["Bot posts/edits GitHub issue comments with results."],
-            ]
-        ],
-        card(title="Security model", description="Per-user isolation")[
-            ul(class_="space-y-1 text-sm text-muted-foreground")[
-                li[
-                    "Each user has their own GitHub App credentials and webhook secret."
+        # Content
+        div(class_="p-4 space-y-3")[
+            div(class_="gh-comment")[
+                span(class_="text-primary font-medium")["@codereview-bot"],
+                span(class_="text-muted-foreground")["  ·  just now"],
+                p(class_="mt-2 text-sm")["👁 Reviewing this PR now..."],
+            ],
+            div(class_="gh-comment")[
+                span(class_="text-primary font-medium")["@codereview-bot"],
+                span(class_="text-muted-foreground")["  ·  2m ago"],
+                p(class_="mt-2 text-sm")[
+                    '✅ Found 2 improvements: Add null guard on "user.email", '
+                    "consider caching lint results."
                 ],
-                li["Each user stores their own model API keys in the database."],
-                li["The worker injects keys at runtime when calling OpenCode."],
-            ]
-        ],
-        card(title="Local dev note", description="GitHub requires public webhooks")[
-            p(class_="text-sm text-muted-foreground")[
-                "GitHub App webhooks must be reachable from the public Internet. For local dev, use a tunnel (e.g. Cloudflare Tunnel/ngrok) to expose this app."
-            ]
+            ],
+            div(class_="gh-comment border-primary/30 bg-primary/[0.02]")[
+                span(class_="text-foreground font-medium")["@developer"],
+                span(class_="text-muted-foreground")["  ·  1m ago"],
+                p(class_="mt-2 text-sm font-mono text-primary")["/ai like"],
+            ],
         ],
     ]
 
-    cta = section_block(tone="bordered", class_="rounded-2xl border border-border/60")[
+    # Hero section with improved layout
+    hero = div(class_="relative rounded-2xl border border-border/60 overflow-hidden")[
+        # Gradient background
         div(
-            class_="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
+            class_="absolute inset-0 bg-gradient-to-br from-muted/50 via-transparent to-primary/[0.03]"
+        ),
+        div(class_="absolute inset-0 hero-pattern"),
+        # Content
+        div(class_="relative p-6 sm:p-10 lg:p-12")[
+            div(class_="grid gap-8 lg:grid-cols-[1.2fr_0.9fr] lg:gap-12 items-center")[
+                div(class_="space-y-6")[
+                    hero_badges,
+                    h1(
+                        class_="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
+                    )[
+                        span(class_="block")["Automated PR reviews"],
+                        span(class_="block text-gradient")["that learn your taste"],
+                    ],
+                    p(class_="text-base sm:text-lg text-muted-foreground max-w-xl")[
+                        "Create your own GitHub App, install it on repos, and let the "
+                        "reviewer comment directly in PRs. Per-user API keys and "
+                        "customizable rule sets."
+                    ],
+                    hero_actions,
+                    div(class_="flex items-start gap-3 text-sm text-muted-foreground")[
+                        lucide_icon("check", class_="size-5 text-success shrink-0"),
+                        div[
+                            strong(class_="text-foreground block")[
+                                "Works entirely from GitHub"
+                            ],
+                            span[
+                                "The UI is a control plane—conversation happens in PR comments."
+                            ],
+                        ],
+                    ],
+                ],
+                # Preview card (hidden on small screens)
+                div(class_="hidden lg:block")[terminal_preview],
+            ],
+        ],
+    ]
+
+    # Stats with icons and improved design
+    stats = div(class_="grid gap-4 sm:grid-cols-3")[
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("zap", class_="size-5 text-success")],
+                div[
+                    p(class_="font-semibold text-foreground")["<10 seconds"],
+                    p(class_="text-sm text-muted-foreground mt-0.5")[
+                        "Time to first review comment"
+                    ],
+                ],
+            ]
+        ],
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("settings", class_="size-5 text-primary")],
+                div[
+                    p(class_="font-semibold text-foreground")["Global + repo rules"],
+                    p(class_="text-sm text-muted-foreground mt-0.5")[
+                        "Configure once or per repository"
+                    ],
+                ],
+            ]
+        ],
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("target", class_="size-5 text-warning")],
+                div[
+                    p(class_="font-semibold text-foreground")["Feedback loop"],
+                    p(class_="text-sm text-muted-foreground mt-0.5")[
+                        "Like, ignore, dislike signals"
+                    ],
+                ],
+            ]
+        ],
+    ]
+
+    # Setup flow with numbered steps
+    setup_flow = div(class_=f"grid gap-4 md:grid-cols-3 {ANIMATE_STAGGER_CLASS}")[
+        _step_card("1", "Create account", "Control plane access", [
+            "Each user brings their own GitHub App and AI provider API keys."
+        ]),
+        _step_card("2", "Create GitHub App", "Manifest flow", [
+            "We redirect you to GitHub with a pre-filled manifest and store credentials."
+        ]),
+        _step_card("3", "Install the app", "Org or repo", [
+            "Choose which repos to grant access for webhooks and PR diffs."
+        ]),
+    ]
+
+    runtime_flow = div(class_=f"grid gap-4 md:grid-cols-3 {ANIMATE_STAGGER_CLASS}")[
+        _step_card("4", "Webhook ingestion", "PR + comment events", [
+            "GitHub calls per-app webhook URL. We verify signatures securely."
+        ]),
+        _step_card("5", "Background review", "Celery + OpenCode", [
+            "Worker fetches PR diff and runs review with your model API key."
+        ]),
+        _step_card("6", "GitHub-native loop", "Comments + feedback", [
+            "Placeholder 👁 comment posted, then edited with full review."
+        ]),
+    ]
+
+    # Features with visual distinction
+    features = div(class_=f"grid gap-4 md:grid-cols-3 {ANIMATE_STAGGER_CLASS}")[
+        card(class_="hover-lift group")[
+            div(class_="space-y-3")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center "
+                    "group-hover:bg-primary/20 transition-colors"
+                )[lucide_icon("refresh-cw", class_="size-5 text-primary")],
+                div[
+                    h2(class_="font-semibold text-foreground")["Auto review"],
+                    p(class_="text-sm text-muted-foreground mt-1")[
+                        "Runs on PR open or sync. Status comment updates when ready."
+                    ],
+                ],
+            ]
+        ],
+        card(class_="hover-lift group")[
+            div(class_="space-y-3")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center "
+                    "group-hover:bg-success/20 transition-colors"
+                )[lucide_icon("brain", class_="size-5 text-success")],
+                div[
+                    h2(class_="font-semibold text-foreground")["Learns you"],
+                    p(class_="text-sm text-muted-foreground mt-1")[
+                        "Records like, dislike, ignore signals to improve reviews."
+                    ],
+                ],
+            ]
+        ],
+        card(class_="hover-lift group")[
+            div(class_="space-y-3")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center "
+                    "group-hover:bg-warning/20 transition-colors"
+                )[lucide_icon("clipboard-list", class_="size-5 text-warning")],
+                div[
+                    h2(class_="font-semibold text-foreground")["Configurable"],
+                    p(class_="text-sm text-muted-foreground mt-1")[
+                        "Tune instruction sets per repo without editing config files."
+                    ],
+                ],
+            ]
+        ],
+    ]
+
+    # Architecture section
+    architecture = div(class_="grid gap-4 md:grid-cols-2")[
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 font-mono text-sm text-primary"
+                )["UI"],
+                div(class_="space-y-2")[
+                    h2(class_="font-semibold")["Control plane"],
+                    p(class_="text-xs text-muted-foreground")["Django + HTMX + htpy"],
+                    ul(class_="space-y-1 text-sm text-muted-foreground mt-2")[
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Manage GitHub App + installations",
+                        ],
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Create global and per-repo rules",
+                        ],
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Store per-user API keys securely",
+                        ],
+                    ],
+                ],
+            ]
+        ],
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-accent flex items-center justify-center shrink-0"
+                )[lucide_icon("cog", class_="size-5 text-accent-foreground")],
+                div(class_="space-y-2")[
+                    h2(class_="font-semibold")["Data plane"],
+                    p(class_="text-xs text-muted-foreground")[
+                        "Webhook → Queue → Review"
+                    ],
+                    ul(class_="space-y-1 text-sm text-muted-foreground mt-2")[
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Validates per-app signatures",
+                        ],
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Celery job fetches PR diff",
+                        ],
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Posts/edits GitHub comments",
+                        ],
+                    ],
+                ],
+            ]
+        ],
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("shield-check", class_="size-5 text-success")],
+                div(class_="space-y-2")[
+                    h2(class_="font-semibold")["Security model"],
+                    p(class_="text-xs text-muted-foreground")["Per-user isolation"],
+                    ul(class_="space-y-1 text-sm text-muted-foreground mt-2")[
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Own GitHub App credentials",
+                        ],
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Own model API keys in DB",
+                        ],
+                        li(class_="flex items-center gap-2")[
+                            span(class_="text-success text-xs")["•"],
+                            "Runtime key injection",
+                        ],
+                    ],
+                ],
+            ]
+        ],
+        card(class_="hover-lift border-dashed")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0"
+                )[lucide_icon("laptop", class_="size-5 text-muted-foreground")],
+                div(class_="space-y-2")[
+                    h2(class_="font-semibold")["Local dev note"],
+                    p(class_="text-xs text-muted-foreground")[
+                        "GitHub requires public webhooks"
+                    ],
+                    p(class_="text-sm text-muted-foreground mt-2")[
+                        "Use a tunnel (Cloudflare/ngrok) to expose webhooks for local dev."
+                    ],
+                ],
+            ]
+        ],
+    ]
+
+    # CTA with gradient border
+    cta = div(
+        class_="relative rounded-2xl border border-border overflow-hidden card-gradient-border"
+    )[
+        div(class_="absolute inset-0 bg-gradient-to-r from-primary/[0.03] to-transparent"),
+        div(
+            class_="relative p-6 sm:p-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
         )[
-            div(class_="grid gap-2")[
-                h2(class_="text-2xl font-semibold")["Ready to ship calmer PR reviews?"],
+            div(class_="space-y-2")[
+                h2(class_="text-xl sm:text-2xl font-semibold")[
+                    "Ready to ship calmer PR reviews?"
+                ],
                 p(class_="text-sm text-muted-foreground")[
                     "Install the GitHub App and set the first rule set in minutes."
                 ],
             ],
-            a(href=install_url)[
-                button_component(variant="primary")["Install GitHub App"]
+            a(href=install_url, class_="group shrink-0")[
+                button_component(
+                    variant="primary",
+                    class_="shadow-lg shadow-primary/20",
+                )[
+                    span["Get started"],
+                    span(
+                        class_="ml-1 group-hover:translate-x-0.5 transition-transform"
+                    )["→"],
+                ]
             ],
-        ]
+        ],
     ]
 
-    content = div(class_="space-y-12")[
+    content = div(class_="space-y-16")[
         hero,
         stats,
-        section_block()[
-            div(class_="grid gap-6")[
-                section_header(
-                    "How it works", subtitle="End-to-end flow", align="left"
-                ),
-                setup_flow,
-                runtime_flow,
-            ]
+        # How it works section
+        div(class_="space-y-8")[
+            div(class_="text-center space-y-2")[
+                span(
+                    class_="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                )["How it works"],
+                h2(class_="text-2xl sm:text-3xl font-bold tracking-tight")[
+                    "End-to-end flow"
+                ],
+            ],
+            setup_flow,
+            runtime_flow,
         ],
-        section_block()[
-            div(class_="grid gap-6")[section_header("What you get"), features]
+        # Features section
+        div(class_="space-y-8")[
+            div(class_="text-center space-y-2")[
+                h2(class_="text-2xl sm:text-3xl font-bold tracking-tight")[
+                    "What you get"
+                ],
+                p(class_="text-muted-foreground max-w-lg mx-auto")[
+                    "Everything you need for automated, learning code reviews"
+                ],
+            ],
+            features,
         ],
-        section_block()[
-            div(class_="grid gap-6")[
-                section_header(
-                    "Architecture",
-                    subtitle="Control plane vs data plane (MVP)",
-                    align="left",
-                ),
-                architecture,
-            ]
+        # Architecture section
+        div(class_="space-y-8")[
+            div(class_="space-y-2")[
+                span(
+                    class_="inline-block px-3 py-1 rounded-full bg-muted text-muted-foreground text-xs font-medium"
+                )["Architecture"],
+                h2(class_="text-2xl sm:text-3xl font-bold tracking-tight")[
+                    "Control plane vs data plane"
+                ],
+            ],
+            architecture,
         ],
         cta,
     ]
@@ -427,21 +673,87 @@ def home(request: HttpRequest) -> HttpResponse:
     return layout(request, content, page_title="CodeReview AI")
 
 
-def dashboard(request: HttpRequest) -> HttpResponse:
-    if not request.user.is_authenticated:
-        content = div(class_="space-y-6")[
-            section_header(
-                "Dashboard",
-                subtitle="Sign in to manage installs and rules.",
-                align="left",
-            ),
-            card(
-                title="Sign in required",
-                description="Create an account to connect GitHub.",
-            )[
+def _step_card(
+    number: str, title: str, subtitle: str, bullets: list[str]
+) -> Renderable:
+    """Render a step card with a number indicator."""
+    bullet_items = [
+        li(class_="text-sm text-muted-foreground")[bullet] for bullet in bullets
+    ]
+    return card(class_="hover-lift relative overflow-hidden")[
+        # Faded number background
+        span(
+            class_="absolute -top-4 -right-2 text-7xl font-bold text-muted-foreground/[0.06] select-none"
+        )[number],
+        div(class_="relative space-y-2")[
+            div(class_="flex items-center gap-3")[
+                span(
+                    class_="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary"
+                )[number],
+                div[
+                    h2(class_="font-semibold text-foreground leading-tight")[title],
+                    p(class_="text-xs text-muted-foreground")[subtitle],
+                ],
+            ],
+            ul(class_="space-y-1 pl-10")[*bullet_items],
+        ],
+    ]
+
+
+def _page_header(title: str, subtitle: str | None = None) -> Renderable:
+    """Render a consistent page header."""
+    return div(class_="space-y-1")[
+        h1(class_="text-2xl sm:text-3xl font-bold tracking-tight")[title],
+        p(class_="text-muted-foreground")[subtitle] if subtitle else span(),
+    ]
+
+
+def _auth_required_card() -> Renderable:
+    """Render a card prompting the user to sign in."""
+    return card(class_="max-w-md")[
+        div(class_="flex items-start gap-4")[
+            div(
+                class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"
+            )[lucide_icon("key-round", class_="size-5 text-primary")],
+            div(class_="space-y-3")[
+                div[
+                    h2(class_="font-semibold")["Sign in required"],
+                    p(class_="text-sm text-muted-foreground")[
+                        "Create an account to access this feature."
+                    ],
+                ],
                 a(href="/account")[
                     button_component(variant="primary")["Go to account"]
                 ],
+            ],
+        ]
+    ]
+
+
+def dashboard(request: HttpRequest) -> HttpResponse:
+    if not request.user.is_authenticated:
+        content = div(class_="space-y-6")[
+            _page_header(
+                "Dashboard",
+                "Sign in to manage installs and rules.",
+            ),
+            card(class_="max-w-md")[
+                div(class_="flex items-start gap-4")[
+                    div(
+                        class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"
+                    )[lucide_icon("key-round", class_="size-5 text-primary")],
+                    div(class_="space-y-3")[
+                        div[
+                            h2(class_="font-semibold")["Sign in required"],
+                            p(class_="text-sm text-muted-foreground")[
+                                "Create an account to connect GitHub."
+                            ],
+                        ],
+                        a(href="/account")[
+                            button_component(variant="primary")["Go to account"]
+                        ],
+                    ],
+                ]
             ],
         ]
         return layout(request, content, page_title="Dashboard")
@@ -616,35 +928,99 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             ]
         )
 
-    ops_card = card(
-        title="Operational visibility",
-        description="Recent review runs and failures.",
-        bordered_header=True,
-    )[
-        div(class_="flex flex-wrap items-center gap-3")[
-            span(class_="text-sm text-muted-foreground")["Last 7 days"],
-            badge_count(run_count_7d, cap=99, variant="secondary"),
-            span(class_="text-sm text-muted-foreground")["Failures"],
-            badge_count(failed_count_7d, cap=99, variant="destructive"),
+    # Stats row
+    stats_row = div(class_="grid gap-4 sm:grid-cols-3")[
+        div(
+            class_="flex items-center gap-3 p-4 rounded-lg border border-border bg-card"
+        )[
+            div(
+                class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"
+            )[span(class_="text-primary font-mono text-sm font-bold")[run_count_7d]],
+            div[
+                p(class_="text-sm font-medium")["Review runs"],
+                p(class_="text-xs text-muted-foreground")["Last 7 days"],
+            ],
         ],
-        div(class_="pt-4")[
+        div(
+            class_="flex items-center gap-3 p-4 rounded-lg border border-border bg-card"
+        )[
+            div(
+                class_="w-10 h-10 rounded-lg flex items-center justify-center "
+                + ("bg-destructive/10" if failed_count_7d > 0 else "bg-success/10")
+            )[
+                span(
+                    class_="font-mono text-sm font-bold "
+                    + ("text-destructive" if failed_count_7d > 0 else "text-success")
+                )[failed_count_7d]
+            ],
+            div[
+                p(class_="text-sm font-medium")["Failures"],
+                p(class_="text-xs text-muted-foreground")["Last 7 days"],
+            ],
+        ],
+        div(
+            class_="flex items-center gap-3 p-4 rounded-lg border border-border bg-card"
+        )[
+            div(
+                class_="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center"
+            )[lucide_icon("circle-check", class_="size-5 text-success")],
+            div[
+                p(class_="text-sm font-medium")[
+                    f"{run_count_7d - failed_count_7d} Successful"
+                ],
+                p(class_="text-xs text-muted-foreground")["Last 7 days"],
+            ],
+        ],
+    ]
+
+    ops_card = card(bordered_header=True)[
+        # Header
+        div(class_="flex items-center justify-between")[
+            div(class_="flex items-center gap-3")[
+                div(
+                    class_="w-8 h-8 rounded-lg bg-muted flex items-center justify-center"
+                )[lucide_icon("chart-bar", class_="size-4 text-muted-foreground")],
+                div[
+                    h2(class_="font-semibold")["Recent activity"],
+                    p(class_="text-xs text-muted-foreground")[
+                        "Review runs from your repositories"
+                    ],
+                ],
+            ],
+        ],
+        # Table
+        div(class_="pt-2")[
             table_component(
                 headers=["When", "Repo", "PR", "SHA", "Status", "Error", ""],
                 rows=run_rows,
             )
             if run_rows
-            else p(class_="text-sm text-muted-foreground")[
-                "No review runs yet. Once you open a PR on an installed repo, the reviewer will start logging runs here."
+            else div(class_="py-8 text-center")[
+                div(
+                    class_="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3"
+                )[lucide_icon("inbox", class_="size-6 text-muted-foreground")],
+                p(class_="text-sm font-medium")["No review runs yet"],
+                p(class_="text-xs text-muted-foreground mt-1")[
+                    "Open a PR on an installed repo to get started"
+                ],
             ]
         ],
     ]
 
     content = div(class_="space-y-8")[
-        section_header(
-            "Dashboard", subtitle="Manage installs and repo coverage.", align="left"
-        ),
+        _page_header("Dashboard", "Manage installs and repo coverage."),
+        stats_row,
         ops_card,
-        div(class_="grid gap-6 md:grid-cols-2")[*cards],
+        # GitHub Apps section
+        div(class_="space-y-4")[
+            div(class_="flex items-center gap-2")[
+                lucide_icon("github", class_="size-5 text-foreground"),
+                h2(class_="font-semibold")["GitHub Apps"],
+            ],
+            div(class_="grid gap-4 md:grid-cols-2")[*cards],
+        ]
+        if cards
+        else span(),
     ]
 
     return layout(request, content, page_title="Dashboard")
@@ -653,19 +1029,8 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def review_run_detail(request: HttpRequest, review_run_id: int) -> HttpResponse:
     if not request.user.is_authenticated:
         content = div(class_="space-y-6")[
-            section_header(
-                "Review run",
-                subtitle="Sign in to see operational details.",
-                align="left",
-            ),
-            card(
-                title="Sign in required",
-                description="Create an account to connect GitHub.",
-            )[
-                a(href="/account")[
-                    button_component(variant="primary")["Go to account"]
-                ],
-            ],
+            _page_header("Review run", "Sign in to see operational details."),
+            _auth_required_card(),
         ]
         return layout(request, content, page_title="Review run")
 
@@ -747,50 +1112,108 @@ def review_run_detail(request: HttpRequest, review_run_id: int) -> HttpResponse:
         )
 
     content = div(class_="space-y-6")[
-        section_header(
-            "Review run",
-            subtitle="Operational details for a single run.",
-            align="left",
-        ),
-        div(class_="flex flex-wrap items-center gap-3")[
-            a(href="/app")[button_component(variant="outline")["Back to dashboard"]],
+        # Header with back button
+        div(class_="flex flex-wrap items-center justify-between gap-4")[
+            div(class_="space-y-1")[
+                div(class_="flex items-center gap-2")[
+                    a(
+                        href="/app",
+                        class_="text-muted-foreground hover:text-foreground transition-colors",
+                    )["← Dashboard"],
+                    span(class_="text-muted-foreground/50")["/"],
+                    span(class_="text-sm text-muted-foreground")["Review run"],
+                ],
+                h1(class_="text-2xl sm:text-3xl font-bold tracking-tight")[
+                    f"Run #{review_run.id}"
+                ],
+            ],
             _review_run_status_badge(review_run.status),
         ],
-        card(title="Run metadata", description="Where this run came from.")[
-            table_component(headers=["Field", "Value"], rows=meta_rows),
+        # Metadata card
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0"
+                )[lucide_icon("file-text", class_="size-5 text-muted-foreground")],
+                div(class_="flex-1 space-y-3")[
+                    div[
+                        h2(class_="font-semibold")["Run metadata"],
+                        p(class_="text-xs text-muted-foreground")[
+                            "Details about this review run"
+                        ],
+                    ],
+                    table_component(headers=["Field", "Value"], rows=meta_rows),
+                ],
+            ]
         ],
-        card(
-            title="Summary",
-            description="The final text posted to GitHub (escaped).",
-            bordered_header=True,
-        )[
-            textarea_component(
-                value=escape(review_run.summary or ""),
-                readonly=True,
-                rows=14,
-                class_="font-mono text-xs",
-            )
+        # Summary card
+        card(bordered_header=True, class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("check", class_="size-5 text-success")],
+                div(class_="flex-1 space-y-3")[
+                    div[
+                        h2(class_="font-semibold")["Summary"],
+                        p(class_="text-xs text-muted-foreground")[
+                            "The final text posted to GitHub"
+                        ],
+                    ],
+                    textarea_component(
+                        value=escape(review_run.summary or ""),
+                        readonly=True,
+                        rows=14,
+                        class_="font-mono text-xs",
+                    ),
+                ],
+            ]
         ],
-        card(
-            title="Error",
-            description="Populated only for failed runs.",
-            bordered_header=True,
-        )[
-            textarea_component(
-                value=escape(review_run.error_message or ""),
-                readonly=True,
-                rows=6,
-                class_="font-mono text-xs",
-            )
-        ],
-        card(
-            title="Comments",
-            description="Every GitHub comment we created/updated for this run.",
-            bordered_header=True,
-        )[
-            div(class_="space-y-4")[*comment_nodes]
-            if comment_nodes
-            else p(class_="text-sm text-muted-foreground")["No comments recorded."],
+        # Error card (only show if there's an error)
+        card(bordered_header=True, class_="hover-lift border-destructive/30")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("triangle-alert", class_="size-5 text-destructive")],
+                div(class_="flex-1 space-y-3")[
+                    div[
+                        h2(class_="font-semibold")["Error"],
+                        p(class_="text-xs text-muted-foreground")[
+                            "Populated only for failed runs"
+                        ],
+                    ],
+                    textarea_component(
+                        value=escape(review_run.error_message or "No errors"),
+                        readonly=True,
+                        rows=6,
+                        class_="font-mono text-xs",
+                    ),
+                ],
+            ]
+        ]
+        if review_run.error_message
+        else span(),
+        # Comments card
+        card(bordered_header=True, class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("message-square", class_="size-5 text-primary")],
+                div(class_="flex-1 space-y-3")[
+                    div[
+                        h2(class_="font-semibold")["Comments"],
+                        p(class_="text-xs text-muted-foreground")[
+                            "GitHub comments created for this run"
+                        ],
+                    ],
+                    div(class_="space-y-4")[*comment_nodes]
+                    if comment_nodes
+                    else div(class_="py-4 text-center")[
+                        p(class_="text-sm text-muted-foreground")[
+                            "No comments recorded."
+                        ]
+                    ],
+                ],
+            ]
         ],
     ]
     return layout(request, content, page_title="Review run")
@@ -819,87 +1242,158 @@ def account(request: HttpRequest) -> HttpResponse:
         github_app = (
             GithubApp.objects.filter(owner=user).order_by("-updated_at").first()
         )
-        content = div(class_="space-y-6")[
-            section_header("Account", subtitle="Manage your profile.", align="left"),
-            card(title=f"Signed in as {user.username}")[
-                form_component(action="/account", method="post")[
-                    csrf_input(request),
-                    form_field[
-                        input_component(
-                            name="github_login",
-                            label_text="GitHub login",
-                            placeholder="your-handle",
-                            value=profile.github_login,
-                        )
-                    ],
-                    button_component(type="submit")["Save"],
+        # GitHub App status badge
+        app_status_badge = (
+            div(
+                class_="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs "
+                + (
+                    "bg-success/10 text-success"
+                    if github_app and github_app.status == GithubApp.STATUS_READY
+                    else "bg-warning/10 text-warning"
+                )
+            )[
+                span(class_="w-1.5 h-1.5 rounded-full bg-current"),
+                github_app.status if github_app else "Not created",
+            ]
+            if github_app
+            else span(
+                class_="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground"
+            )[
+                span(class_="w-1.5 h-1.5 rounded-full bg-current"),
+                "Not created",
+            ]
+        )
+
+        content = div(class_="space-y-8")[
+            _page_header("Account", "Manage your profile and integrations."),
+            # Profile section
+            div(class_="grid gap-6 lg:grid-cols-2")[
+                card(class_="hover-lift")[
+                    div(class_="flex items-start gap-4")[
+                        div(
+                            class_="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0"
+                        )[
+                            span(class_="text-primary font-semibold text-lg")[
+                                user.username[0].upper()
+                            ]
+                        ],
+                        div(class_="flex-1 space-y-4")[
+                            div(class_="flex items-center justify-between")[
+                                div[
+                                    h2(class_="font-semibold text-lg")[user.username],
+                                    p(class_="text-xs text-muted-foreground")[
+                                        user.email or "No email set"
+                                    ],
+                                ],
+                                a(href="/account/logout")[
+                                    button_component(variant="ghost", size="sm")[
+                                        "Sign out"
+                                    ]
+                                ],
+                            ],
+                            form_component(action="/account", method="post")[
+                                csrf_input(request),
+                                form_field[
+                                    input_component(
+                                        name="github_login",
+                                        label_text="GitHub login",
+                                        placeholder="your-handle",
+                                        value=profile.github_login,
+                                    )
+                                ],
+                                button_component(type="submit", size="sm")["Save"],
+                            ],
+                        ],
+                    ]
                 ],
-                div(class_="pt-2")[
-                    a(href="/account/logout")[
-                        button_component(variant="outline")["Sign out"]
+                # API Keys card
+                card(class_="hover-lift")[
+                    div(class_="flex items-start gap-4")[
+                        div(
+                            class_="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0"
+                        )[span(class_="text-warning")["🔑"]],
+                        div(class_="flex-1 space-y-3")[
+                            div[
+                                h2(class_="font-semibold")["API Keys"],
+                                p(class_="text-xs text-muted-foreground")[
+                                    "Per-user keys for model inference"
+                                ],
+                            ],
+                            form_component(action="/account/api-keys", method="post")[
+                                csrf_input(request),
+                                form_field[
+                                    input_component(
+                                        name="zai_api_key",
+                                        label_text="Z.AI API key",
+                                        placeholder="paste your key",
+                                        value=masked_zai,
+                                    )
+                                ],
+                                button_component(type="submit", size="sm")["Save"],
+                            ],
+                            p(class_="text-xs text-muted-foreground")[
+                                "Keys are injected at runtime when running reviews."
+                            ],
+                        ],
                     ]
                 ],
             ],
-            card(
-                title="GitHub App", description="Create your own GitHub App (per user)."
-            )[
-                p(class_="text-sm text-muted-foreground")[
-                    "This uses GitHub's App Manifest flow to create an app on your GitHub account, then stores the credentials server-side."
-                ],
-                div(class_="pt-3 flex flex-wrap items-center gap-3")[
-                    form_component(action="/github/apps/create", method="post")[
-                        csrf_input(request),
-                        button_component(type="submit", variant="primary")[
-                            "Create GitHub App"
+            # GitHub App section
+            card(class_="hover-lift")[
+                div(class_="flex items-start gap-4")[
+                    div(
+                        class_="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0"
+                    )[span(class_="font-mono text-sm")["GH"]],
+                    div(class_="flex-1 space-y-4")[
+                        div(class_="flex items-start justify-between gap-4")[
+                            div[
+                                div(class_="flex items-center gap-2")[
+                                    h2(class_="font-semibold")["GitHub App"],
+                                    app_status_badge,
+                                ],
+                                p(class_="text-sm text-muted-foreground mt-1")[
+                                    "Create your own GitHub App using the manifest flow."
+                                ],
+                            ],
+                        ],
+                        div(class_="flex flex-wrap items-center gap-2")[
+                            form_component(
+                                action="/github/apps/create",
+                                method="post",
+                                class_="inline",
+                            )[
+                                csrf_input(request),
+                                button_component(type="submit", variant="primary")[
+                                    "Create new app" if github_app else "Create GitHub App"
+                                ],
+                            ],
+                            a(
+                                href=f"/github/apps/{github_app.uuid}/setup"
+                                if github_app
+                                else "/app",
+                            )[button_component(variant="outline")["Open setup"]]
+                            if github_app
+                            else span(),
+                            a(
+                                href=f"https://github.com/apps/{github_app.slug}/installations/new"
+                                if github_app and github_app.slug
+                                else "/app",
+                            )[button_component(variant="outline")["Install on repos"]]
+                            if github_app and github_app.slug
+                            else span(),
                         ],
                     ],
-                    a(
-                        href=f"/github/apps/{github_app.uuid}/setup"
-                        if github_app
-                        else "/app",
-                    )[button_component(variant="outline")["Open setup"]],
-                    a(
-                        href=f"https://github.com/apps/{github_app.slug}/installations/new"
-                        if github_app and github_app.slug
-                        else "/app",
-                    )[button_component(variant="outline")["Install / Manage repos"]],
-                ],
-                div(class_="pt-3")[
-                    p(class_="text-xs text-muted-foreground")[
-                        f"Status: {github_app.status}"
-                        if github_app
-                        else "No GitHub App yet."
-                    ]
-                ],
-            ],
-            card(title="API Keys", description="Per-user keys (not env vars).")[
-                form_component(action="/account/api-keys", method="post")[
-                    csrf_input(request),
-                    form_field[
-                        input_component(
-                            name="zai_api_key",
-                            label_text="Z.AI Coding Plan API key (for zai-coding-plan/glm-4.7)",
-                            placeholder="paste your key",
-                            value=masked_zai,
-                        )
-                    ],
-                    button_component(type="submit")["Save"],
-                ],
-                p(class_="pt-2 text-xs text-muted-foreground")[
-                    "Keys are stored per user and will be injected into the review worker when running models."
-                ],
+                ]
             ],
         ]
         return layout(request, content, page_title="Account")
 
+    # Unauthenticated view
     content = div(class_="space-y-8")[
-        section_header(
-            "Account",
-            subtitle="Create an account to manage installs and rules.",
-            align="left",
-        ),
-        div(class_="grid gap-6 md:grid-cols-2")[
-            _signup_form(request), _login_form(request)
+        _page_header("Account", "Create an account to manage installs and rules."),
+        div(class_="grid gap-6 md:grid-cols-2 max-w-3xl")[
+            _signup_form(request),
+            _login_form(request),
         ],
     ]
     return layout(request, content, page_title="Account")
@@ -1108,14 +1602,23 @@ def rules(request: HttpRequest) -> HttpResponse:
     )
 
     content = div(class_="space-y-8")[
-        section_header(
+        _page_header(
             "Review Rules",
-            subtitle="Global rules apply everywhere. Repo rules override or extend them.",
-            align="left",
+            "Global rules apply everywhere. Repo rules override or extend them.",
         ),
-        div(class_="grid gap-6 lg:grid-cols-[1.2fr_2fr]")[
+        div(class_="grid gap-6 lg:grid-cols-[1fr_1.5fr]")[
             _rule_set_form(request, repositories),
-            *_rule_sets_block(request, rule_sets),
+            div(class_="space-y-4")[*_rule_sets_block(request, rule_sets)]
+            if list(rule_sets)
+            else div(class_="flex items-center justify-center p-12 rounded-lg border border-dashed border-border")[
+                div(class_="text-center space-y-2")[
+                    lucide_icon("clipboard-list", class_="size-8 text-muted-foreground mx-auto"),
+                    p(class_="font-medium")["No rule sets yet"],
+                    p(class_="text-sm text-muted-foreground")[
+                        "Create your first rule set to get started"
+                    ],
+                ]
+            ],
         ],
     ]
 
@@ -1377,50 +1880,133 @@ def feedback(request: HttpRequest) -> HttpResponse:
             ]
         )
 
+    # Stats summary
+    stats_row = div(class_="grid gap-4 sm:grid-cols-3")[
+        div(
+            class_="flex items-center gap-3 p-4 rounded-lg border border-border bg-card"
+        )[
+            div(
+                class_="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center"
+            )[lucide_icon("thumbs-up", class_="size-5 text-success")],
+            div[
+                p(class_="text-sm font-medium")["Feedback signals"],
+                p(class_="text-xs text-muted-foreground")[
+                    f"{len(list(recent_feedback))} recorded"
+                ],
+            ],
+        ],
+        div(
+            class_="flex items-center gap-3 p-4 rounded-lg border border-border bg-card"
+        )[
+            div(
+                class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"
+            )[lucide_icon("at-sign", class_="size-5 text-primary")],
+            div[
+                p(class_="text-sm font-medium")["Mentions"],
+                p(class_="text-xs text-muted-foreground")[
+                    f"{len(list(recent_mentions))} recorded"
+                ],
+            ],
+        ],
+        div(
+            class_="flex items-center gap-3 p-4 rounded-lg border border-border bg-card"
+        )[
+            div(
+                class_="w-10 h-10 rounded-lg bg-muted flex items-center justify-center"
+            )[lucide_icon("target", class_="size-5 text-muted-foreground")],
+            div[
+                p(class_="text-sm font-medium")["Learning"],
+                p(class_="text-xs text-muted-foreground")["Improving reviews"],
+            ],
+        ],
+    ]
+
     content = div(class_="space-y-8")[
-        section_header(
+        _page_header(
             "Feedback",
-            subtitle="Inspect and clean up what the reviewer has learned (per repo).",
-            align="left",
+            "Inspect and clean up what the reviewer has learned.",
         ),
-        card(title="Filter", description="Choose a repository to scope results.")[
-            form_component(action="/feedback", method="get", class_="max-w-xl")[
-                form_field[repo_select],
-                input_el(type="hidden", name="limit", value=str(limit)),
-                button_component(type="submit", variant="outline")["Apply"],
+        stats_row,
+        # Filter card
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0"
+                )[lucide_icon("search", class_="size-5 text-muted-foreground")],
+                div(class_="flex-1 space-y-3")[
+                    div[
+                        h2(class_="font-semibold")["Filter"],
+                        p(class_="text-xs text-muted-foreground")[
+                            "Scope results by repository"
+                        ],
+                    ],
+                    form_component(
+                        action="/feedback", method="get", class_="flex items-end gap-3"
+                    )[
+                        div(class_="flex-1")[form_field[repo_select]],
+                        input_el(type="hidden", name="limit", value=str(limit)),
+                        button_component(type="submit", variant="outline")["Apply"],
+                    ],
+                ],
             ]
         ],
-        card(
-            title="Feedback signals",
-            description="Signals recorded from /ai like, /ai dislike, /ai ignore.",
-        )[
-            ul(class_="space-y-3")[*feedback_items]
-            if feedback_items
-            else p(class_="text-sm text-muted-foreground")[
-                "No feedback signals recorded yet."
-            ],
-            a(
-                href=_feedback_more_link(repo_id_raw, limit),
-                class_="text-sm text-muted-foreground hover:text-foreground",
-            )["Load more"]
-            if len(recent_feedback) == limit
-            else span(),
+        # Feedback signals
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("thumbs-up", class_="size-5 text-success")],
+                div(class_="flex-1 space-y-3")[
+                    div[
+                        h2(class_="font-semibold")["Feedback signals"],
+                        p(class_="text-xs text-muted-foreground")[
+                            "Signals from /ai like, /ai dislike, /ai ignore"
+                        ],
+                    ],
+                    ul(class_="space-y-3")[*feedback_items]
+                    if feedback_items
+                    else div(class_="py-4 text-center")[
+                        p(class_="text-sm text-muted-foreground")[
+                            "No feedback signals recorded yet."
+                        ]
+                    ],
+                    a(
+                        href=_feedback_more_link(repo_id_raw, limit),
+                        class_="inline-block text-sm text-primary hover:underline",
+                    )["Load more →"]
+                    if len(recent_feedback) == limit
+                    else span(),
+                ],
+            ]
         ],
-        card(
-            title="Mentions",
-            description="PR comments where @codereview was mentioned.",
-        )[
-            ul(class_="space-y-3")[*mention_items]
-            if mention_items
-            else p(class_="text-sm text-muted-foreground")[
-                "No @codereview mentions recorded yet."
-            ],
-            a(
-                href=_feedback_more_link(repo_id_raw, limit),
-                class_="text-sm text-muted-foreground hover:text-foreground",
-            )["Load more"]
-            if len(recent_mentions) == limit
-            else span(),
+        # Mentions
+        card(class_="hover-lift")[
+            div(class_="flex items-start gap-4")[
+                div(
+                    class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"
+                )[lucide_icon("message-square", class_="size-5 text-primary")],
+                div(class_="flex-1 space-y-3")[
+                    div[
+                        h2(class_="font-semibold")["Mentions"],
+                        p(class_="text-xs text-muted-foreground")[
+                            "PR comments where @codereview was mentioned"
+                        ],
+                    ],
+                    ul(class_="space-y-3")[*mention_items]
+                    if mention_items
+                    else div(class_="py-4 text-center")[
+                        p(class_="text-sm text-muted-foreground")[
+                            "No @codereview mentions recorded yet."
+                        ]
+                    ],
+                    a(
+                        href=_feedback_more_link(repo_id_raw, limit),
+                        class_="inline-block text-sm text-primary hover:underline",
+                    )["Load more →"]
+                    if len(recent_mentions) == limit
+                    else span(),
+                ],
+            ]
         ],
     ]
     return layout(request, content, page_title="Feedback")
@@ -1889,39 +2475,81 @@ def _rule_sets_block(
 
 
 def _signup_form(request: HttpRequest) -> Renderable:
-    return card(title="Create account", description="Sign up to manage installs.")[
-        form_component(action="/account/signup", method="post")[
-            csrf_input(request),
-            form_field[
-                input_component(
-                    name="username", label_text="Username", placeholder="yourname"
-                )
+    return card(class_="hover-lift")[
+        div(class_="flex items-start gap-4")[
+            div(
+                class_="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"
+            )[lucide_icon("sparkles", class_="size-5 text-primary")],
+            div(class_="flex-1 space-y-4")[
+                div[
+                    h2(class_="font-semibold")["Create account"],
+                    p(class_="text-sm text-muted-foreground")[
+                        "Sign up to manage installs and rules."
+                    ],
+                ],
+                form_component(action="/account/signup", method="post")[
+                    csrf_input(request),
+                    form_field[
+                        input_component(
+                            name="username",
+                            label_text="Username",
+                            placeholder="yourname",
+                        )
+                    ],
+                    form_field[
+                        input_component(
+                            name="email",
+                            label_text="Email",
+                            placeholder="you@example.com",
+                            type="email",
+                        )
+                    ],
+                    form_field[
+                        input_component(
+                            name="password", label_text="Password", type="password"
+                        )
+                    ],
+                    button_component(
+                        type="submit",
+                        variant="primary",
+                        class_="w-full",
+                    )["Create account"],
+                ],
             ],
-            form_field[
-                input_component(
-                    name="email",
-                    label_text="Email",
-                    placeholder="you@example.com",
-                    type="email",
-                )
-            ],
-            form_field[
-                input_component(name="password", label_text="Password", type="password")
-            ],
-            button_component(type="submit")[["Sign up"]],
         ]
     ]
 
 
 def _login_form(request: HttpRequest) -> Renderable:
-    return card(title="Sign in", description="Access your existing account.")[
-        form_component(action="/account/login", method="post")[
-            csrf_input(request),
-            form_field[input_component(name="username", label_text="Username")],
-            form_field[
-                input_component(name="password", label_text="Password", type="password")
+    return card(class_="hover-lift")[
+        div(class_="flex items-start gap-4")[
+            div(
+                class_="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0"
+            )[lucide_icon("log-in", class_="size-5 text-muted-foreground")],
+            div(class_="flex-1 space-y-4")[
+                div[
+                    h2(class_="font-semibold")["Sign in"],
+                    p(class_="text-sm text-muted-foreground")[
+                        "Access your existing account."
+                    ],
+                ],
+                form_component(action="/account/login", method="post")[
+                    csrf_input(request),
+                    form_field[
+                        input_component(name="username", label_text="Username")
+                    ],
+                    form_field[
+                        input_component(
+                            name="password", label_text="Password", type="password"
+                        )
+                    ],
+                    button_component(
+                        type="submit",
+                        variant="outline",
+                        class_="w-full",
+                    )["Sign in"],
+                ],
             ],
-            button_component(type="submit", variant="outline")[["Sign in"]],
         ]
     ]
 

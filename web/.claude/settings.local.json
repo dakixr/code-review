@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(uv run python:*)",
+      "Bash(pnpm run build:css:*)",
+      "Bash(npx @tailwindcss/cli:*)"
+    ]
+  }
+}

@@ -1,3 +1,9 @@
+/* ============================================================================
+   CodeReview AI Design System
+   Aesthetic: Developer Terminal / Code Editor inspired
+   Typography: JetBrains Mono for code, Geist for UI
+   ============================================================================ */
+
 /* Alpine.js */
 [x-cloak] {
   display: none !important;
@@ -6,93 +12,177 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Core radius and spacing */
+  --radius: 0.5rem;
+
+  /* Light mode - Clean, professional with neutral slate accent */
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.15 0.01 250);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.15 0.01 250);
+
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.15 0.01 250);
+
+  /* Primary: Deep slate for actions */
+  --primary: oklch(0.35 0.02 250);
+  --primary-foreground: oklch(0.98 0 0);
+
+  /* Secondary: Cool neutral */
+  --secondary: oklch(0.955 0.005 250);
+  --secondary-foreground: oklch(0.25 0.01 250);
+
+  /* Muted: For less prominent text */
+  --muted: oklch(0.96 0.003 250);
+  --muted-foreground: oklch(0.45 0.01 250);
+
+  /* Accent: Subtle slate highlight */
+  --accent: oklch(0.94 0.01 250);
+  --accent-foreground: oklch(0.25 0.01 250);
+
+  /* Semantic colors */
+  --destructive: oklch(0.55 0.22 25);
+  --success: oklch(0.55 0.18 155);
+  --warning: oklch(0.7 0.15 70);
+  --info: oklch(0.55 0.14 250);
+
+  /* Border and input */
+  --border: oklch(0.88 0.008 250);
+  --input: oklch(0.92 0.005 250);
+  --ring: oklch(0.35 0.02 250);
+
+  /* Chart colors - Muted but distinguishable */
+  --chart-1: oklch(0.45 0.02 250);
+  --chart-2: oklch(0.6 0.15 155);
+  --chart-3: oklch(0.65 0.12 50);
+  --chart-4: oklch(0.55 0.15 320);
+  --chart-5: oklch(0.6 0.12 25);
+
+  /* Sidebar */
+  --sidebar: oklch(0.975 0.003 250);
+  --sidebar-foreground: oklch(0.15 0.01 250);
+  --sidebar-primary: oklch(0.35 0.02 250);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.94 0.008 250);
+  --sidebar-accent-foreground: oklch(0.25 0.01 250);
+  --sidebar-border: oklch(0.9 0.008 250);
+  --sidebar-ring: oklch(0.35 0.02 250);
   --sidebar-width: 16rem;
   --sidebar-mobile-width: 18rem;
+
+  /* Scrollbar */
   --scrollbar-track: transparent;
-  --scrollbar-thumb: rgba(0, 0, 0, 0.3);
-  --scrollbar-width: 6px;
-  --scrollbar-radius: 6px;
-  --chevron-down-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.556 0 0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down-icon lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>'); /* --muted-foreground */
-  --chevron-down-icon-50: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.556 0 0 / 0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down-icon lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>'); /* --muted-foreground + 50% opacity */
-  --check-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.556 0 0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-icon lucide-check"><path d="M20 6 9 17l-5-5"/></svg>'); /* --muted-foreground */
+  --scrollbar-thumb: oklch(0.7 0.01 250 / 0.5);
+  --scrollbar-width: 8px;
+  --scrollbar-radius: 4px;
+
+  /* Icons */
+  --chevron-down-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.45 0.01 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+  --chevron-down-icon-50: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.45 0.01 250 / 0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+  --check-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.45 0.01 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>');
+
+  /* Gradients and effects */
+  --gradient-primary: linear-gradient(135deg, oklch(0.35 0.02 250), oklch(0.45 0.025 260));
+  --gradient-surface: linear-gradient(180deg, oklch(1 0 0) 0%, oklch(0.98 0.003 250) 100%);
+  --gradient-glow: radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.35 0.02 250 / 0.1), transparent);
+
+  /* Code syntax colors - GitHub-inspired for light */
+  --syntax-keyword: oklch(0.5 0.18 320);
+  --syntax-string: oklch(0.45 0.12 155);
+  --syntax-comment: oklch(0.55 0.01 250);
+  --syntax-function: oklch(0.45 0.15 250);
+  --syntax-number: oklch(0.5 0.15 25);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.269 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.439 0 0);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.3);
-  --chevron-down-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.708 0 0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down-icon lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>'); /* --muted-foreground */
-  --chevron-down-icon-50: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.708 0 0 / 0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down-icon lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>'); /* --muted-foreground + 50% opacity */
-  --check-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.708 0 0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-icon lucide-check"><path d="M20 6 9 17l-5-5"/></svg>');/* --muted-foreground */
+  /* Dark mode - Deep, rich with neutral slate accents */
+  --background: oklch(0.12 0.01 250);
+  --foreground: oklch(0.92 0.005 250);
+
+  --card: oklch(0.16 0.012 250);
+  --card-foreground: oklch(0.92 0.005 250);
+
+  --popover: oklch(0.18 0.015 250);
+  --popover-foreground: oklch(0.92 0.005 250);
+
+  /* Primary: Light slate for visibility */
+  --primary: oklch(0.85 0.01 250);
+  --primary-foreground: oklch(0.12 0.01 250);
+
+  /* Secondary: Muted slate */
+  --secondary: oklch(0.22 0.015 250);
+  --secondary-foreground: oklch(0.9 0.005 250);
+
+  /* Muted */
+  --muted: oklch(0.2 0.01 250);
+  --muted-foreground: oklch(0.6 0.015 250);
+
+  /* Accent: Subtle slate glow */
+  --accent: oklch(0.25 0.02 250);
+  --accent-foreground: oklch(0.92 0.005 250);
+
+  /* Semantic colors - Brighter for dark mode */
+  --destructive: oklch(0.65 0.22 25);
+  --success: oklch(0.65 0.2 155);
+  --warning: oklch(0.75 0.16 70);
+  --info: oklch(0.65 0.12 250);
+
+  /* Border and input */
+  --border: oklch(0.28 0.015 250);
+  --input: oklch(0.22 0.012 250);
+  --ring: oklch(0.85 0.01 250);
+
+  /* Chart colors */
+  --chart-1: oklch(0.7 0.02 250);
+  --chart-2: oklch(0.7 0.18 155);
+  --chart-3: oklch(0.75 0.15 55);
+  --chart-4: oklch(0.65 0.18 320);
+  --chart-5: oklch(0.7 0.15 30);
+
+  /* Sidebar */
+  --sidebar: oklch(0.14 0.012 250);
+  --sidebar-foreground: oklch(0.92 0.005 250);
+  --sidebar-primary: oklch(0.85 0.01 250);
+  --sidebar-primary-foreground: oklch(0.12 0.01 250);
+  --sidebar-accent: oklch(0.25 0.02 250);
+  --sidebar-accent-foreground: oklch(0.92 0.005 250);
+  --sidebar-border: oklch(0.28 0.015 250);
+  --sidebar-ring: oklch(0.6 0.015 250);
+
+  /* Scrollbar */
+  --scrollbar-thumb: oklch(0.4 0.02 250 / 0.6);
+
+  /* Icons */
+  --chevron-down-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.6 0.015 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+  --chevron-down-icon-50: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.6 0.015 250 / 0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+  --check-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.6 0.015 250)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>');
+
+  /* Gradients and effects */
+  --gradient-primary: linear-gradient(135deg, oklch(0.6 0.015 250), oklch(0.75 0.02 260));
+  --gradient-surface: linear-gradient(180deg, oklch(0.16 0.012 250) 0%, oklch(0.13 0.01 250) 100%);
+  --gradient-glow: radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.85 0.01 250 / 0.15), transparent);
+
+  /* Code syntax colors - VSCode-inspired for dark */
+  --syntax-keyword: oklch(0.75 0.18 320);
+  --syntax-string: oklch(0.7 0.15 155);
+  --syntax-comment: oklch(0.5 0.015 250);
+  --syntax-function: oklch(0.8 0.1 85);
+  --syntax-number: oklch(0.75 0.1 175);
+
   color-scheme: dark;
 }
 
 @theme {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-2xl: calc(var(--radius) + 10px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -108,6 +198,9 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
