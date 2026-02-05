@@ -285,7 +285,7 @@ class UserProfile(models.Model):
 class UserApiKey(models.Model):
     PROVIDER_ZAI = "zai"
     PROVIDER_CHOICES = [
-        (PROVIDER_ZAI, "ZAI / GLM"),
+        (PROVIDER_ZAI, "Z.AI Coding Plan (GLM)"),
     ]
 
     user = models.ForeignKey(

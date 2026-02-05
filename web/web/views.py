@@ -878,8 +878,8 @@ def account(request: HttpRequest) -> HttpResponse:
                     form_field[
                         input_component(
                             name="zai_api_key",
-                            label_text="ZAI API key (for zai/glm-4.7)",
-                            placeholder="zai_...",
+                            label_text="Z.AI Coding Plan API key (for zai-coding-plan/glm-4.7)",
+                            placeholder="paste your key",
                             value=masked_zai,
                         )
                     ],

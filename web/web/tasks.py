@@ -30,6 +30,15 @@ _ZAI_TOKEN_ERROR_SUBSTRINGS = {
     "token expired or incorrect",
     "invalid api key",
     "invalid apikey",
+    "authorization token missing",
+    "providermodelnotfounderror",
+}
+
+_ZAI_QUOTA_ERROR_SUBSTRINGS = {
+    "insufficient balance",
+    "no resource package",
+    "please recharge",
+    'code":"1113"',
 }
 
 
@@ -89,7 +98,7 @@ def run_pr_review(review_run_id: int) -> None:
         api_key = (api_key or "").strip()
         if not api_key:
             raise RuntimeError(
-                "Missing ZAI API key for this user. Go to Account → API Keys and set it."
+                "Missing Z.AI Coding Plan API key for this user. Go to Account → API Keys and set it."
             )
 
         token = github.get_installation_token(installation.installation_id, auth)
@@ -157,8 +166,8 @@ def run_pr_review(review_run_id: int) -> None:
             "Context files:\n"
             "- `pull_request.diff` (the PR diff)\n"
             "- `repo_snapshot.md` (repo snapshot metadata)\n"
-            "- `repo_index.md` (full file listing)\n"
-            "You can read any file in the repository via the OpenCode project workspace.\n\n"
+            "- `repo_index.md` (full file listing; paths are prefixed with `repo/`)\n"
+            "You can read any file in the repository under the `repo/` directory in the OpenCode project workspace.\n\n"
             "Project rules / preferences:\n"
             f"{rules_text}\n\n"
             "Task:\n"
@@ -191,11 +200,13 @@ def run_pr_review(review_run_id: int) -> None:
                     encoding="utf-8",
                 )
                 context_files.append(repo_index_path)
+            _write_opencode_project_config(tmp_path=tmp_path)
             result = run_opencode(
                 message=prompt,
                 files=context_files,
-                env={"ZAI_API_KEY": api_key},
-                cwd=repo_dir,
+                env={},
+                auth={"zai-coding-plan": {"type": "api", "key": api_key}},
+                cwd=tmp_path,
             )
         logger.info("review.opencode_done review_run_id=%s", review_run_id)
 
@@ -220,8 +231,13 @@ def run_pr_review(review_run_id: int) -> None:
         error_text = str(e).strip() or "Unknown error"
         if _looks_like_zai_auth_error(error_text):
             error_text = (
-                "ZAI API key rejected (token expired or incorrect). "
-                "Go to Account → API Keys and update your ZAI key."
+                "Z.AI Coding Plan API key rejected (token expired or incorrect). "
+                "Go to Account → API Keys and update your key."
+            )
+        elif _looks_like_zai_quota_error(error_text):
+            error_text = (
+                "Z.AI request rejected due to insufficient balance/quota. "
+                "Please recharge/add credits for your Z.AI account."
             )
         logger.exception(
             "review.failed review_run_id=%s error=%s", review_run_id, error_text
@@ -309,7 +325,7 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
         api_key = (api_key or "").strip()
         if not api_key:
             raise RuntimeError(
-                "Missing ZAI API key for this user. Go to Account → API Keys and set it."
+                "Missing Z.AI Coding Plan API key for this user. Go to Account → API Keys and set it."
             )
 
         rules_text = _build_rules_text(owner=owner, repository=repository)
@@ -353,8 +369,8 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
             "If something is uncertain or missing, ask a clarifying question instead of guessing.\n\n"
             "Repository access:\n"
             "- `repo_snapshot.md` (repo snapshot metadata)\n"
-            "- `repo_index.md` (full file listing)\n"
-            "You can read any file in the repository via the OpenCode project workspace.\n\n"
+            "- `repo_index.md` (full file listing; paths are prefixed with `repo/`)\n"
+            "You can read any file in the repository under the `repo/` directory in the OpenCode project workspace.\n\n"
             "Project rules / preferences:\n"
             f"{rules_text}\n\n"
             "PR:\n"
@@ -415,11 +431,13 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
                 )
                 context_files.append(repo_index_path)
 
+            _write_opencode_project_config(tmp_path=tmp_path)
             result = run_opencode(
                 message=prompt,
                 files=context_files,
-                env={"ZAI_API_KEY": api_key},
-                cwd=repo_dir,
+                env={},
+                auth={"zai-coding-plan": {"type": "api", "key": api_key}},
+                cwd=tmp_path,
             )
 
         response = result.text.strip()
@@ -454,8 +472,13 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
         error_text = str(e).strip() or "Unknown error"
         if _looks_like_zai_auth_error(error_text):
             error_text = (
-                "ZAI API key rejected (token expired or incorrect). "
-                "Go to Account → API Keys and update your ZAI key."
+                "Z.AI Coding Plan API key rejected (token expired or incorrect). "
+                "Go to Account → API Keys and update your key."
+            )
+        elif _looks_like_zai_quota_error(error_text):
+            error_text = (
+                "Z.AI request rejected due to insufficient balance/quota. "
+                "Please recharge/add credits for your Z.AI account."
             )
         logger.exception(
             "chat.failed pull_request_id=%s chat_message_id=%s error=%s",
@@ -486,6 +509,11 @@ def handle_chat_response_v2(pull_request_id: int, chat_message_id: int) -> None:
 def _looks_like_zai_auth_error(message: str) -> bool:
     normalized = message.strip().lower()
     return any(substr in normalized for substr in _ZAI_TOKEN_ERROR_SUBSTRINGS)
+
+
+def _looks_like_zai_quota_error(message: str) -> bool:
+    normalized = message.strip().lower()
+    return any(substr in normalized for substr in _ZAI_QUOTA_ERROR_SUBSTRINGS)
 
 
 def _extract_user_query(body: str) -> str:
@@ -752,7 +780,7 @@ def _prepare_repo_snapshot(
         f"- Repo: `{repo_full_name}`",
         f"- Ref: `{head_sha}`",
         f"- Method: {method}",
-        "- OpenCode working dir: `repo/` (full working tree; `.git` metadata excluded when using git)",
+        "- Repo checkout: `repo/` (full working tree; `.git` metadata excluded when using git)",
         "- Attached: `repo_index.md` (file listing)",
     ]
     if stats:
@@ -760,6 +788,18 @@ def _prepare_repo_snapshot(
         lines.append(f"- Files: {file_count:,}")
         lines.append(f"- Size: {total_bytes / (1024 * 1024):.1f} MiB")
     return repo_dir, "\n".join(lines).strip() + "\n"
+
+
+def _write_opencode_project_config(*, tmp_path: Path) -> None:
+    config_path = Path(__file__).resolve().parents[1] / "opencode.json"
+    if not config_path.is_file():
+        raise RuntimeError(
+            f"Missing service OpenCode config at {config_path.as_posix()!r}"
+        )
+    (tmp_path / "opencode.json").write_text(
+        config_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
 
 def _git_checkout_repo_at_sha(
@@ -777,8 +817,7 @@ def _git_checkout_repo_at_sha(
     remote_url = f"https://x-access-token@github.com/{repo_full_name}.git"
     askpass_path = repo_dir.parent / "git_askpass.sh"
     askpass_path.write_text(
-        "#!/bin/sh\n"
-        'exec printf "%s" "${GITHUB_TOKEN:-}"\n',
+        '#!/bin/sh\nexec printf "%s" "${GITHUB_TOKEN:-}"\n',
         encoding="utf-8",
     )
     askpass_path.chmod(0o700)
@@ -909,8 +948,16 @@ def _repo_stats(*, repo_dir: Path) -> tuple[int, int] | None:
         return None
 
 
-def _render_repo_index_markdown(*, repo_dir: Path, max_paths: int = 8_000) -> str:
+def _render_repo_index_markdown(
+    *,
+    repo_dir: Path,
+    path_prefix: str = "repo/",
+    max_paths: int = 8_000,
+) -> str:
     repo_dir_resolved = repo_dir.resolve()
+    prefix = (path_prefix or "").strip()
+    if prefix and not prefix.endswith("/"):
+        prefix = prefix + "/"
     paths: list[str] = []
     for root, dirs, files in os.walk(repo_dir):
         dirs[:] = [
@@ -941,7 +988,7 @@ def _render_repo_index_markdown(*, repo_dir: Path, max_paths: int = 8_000) -> st
             if not path.is_relative_to(repo_dir_resolved):
                 continue
             rel = path.relative_to(repo_dir_resolved).as_posix()
-            paths.append(rel)
+            paths.append(f"{prefix}{rel}" if prefix else rel)
             if len(paths) >= max_paths:
                 break
         if len(paths) >= max_paths:

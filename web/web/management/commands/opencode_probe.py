@@ -69,10 +69,11 @@ class Command(BaseCommand):
                 user_id=int(options.get("user_id") or 0),
             )
 
-        env: dict[str, str] = {"ZAI_API_KEY": api_key}
+        env: dict[str, str] = {}
         opencode_bin = str(options.get("opencode_bin") or "").strip()
         if opencode_bin:
             env["OPENCODE_BIN"] = opencode_bin
+        auth = {"zai-coding-plan": {"type": "api", "key": api_key}}
 
         if not options.get("no_files"):
             with tempfile.TemporaryDirectory(prefix="codereview-opencode-probe-") as td:
@@ -86,6 +87,7 @@ class Command(BaseCommand):
                     message=message,
                     files=[context_path],
                     env=env,
+                    auth=auth,
                     timeout_seconds=float(options.get("timeout_seconds") or 120.0),
                 )
                 output = result.text.strip()
@@ -94,6 +96,7 @@ class Command(BaseCommand):
                 message=message,
                 files=None,
                 env=env,
+                auth=auth,
                 timeout_seconds=float(options.get("timeout_seconds") or 120.0),
             )
             output = result.text.strip()
@@ -129,6 +132,6 @@ class Command(BaseCommand):
         api_key = (api_key or "").strip()
         if not api_key:
             raise CommandError(
-                "No active ZAI API key found for that user. Set it at Account → API Keys."
+                "No active Z.AI Coding Plan API key found for that user. Set it at Account → API Keys."
             )
         return api_key

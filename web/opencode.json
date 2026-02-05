@@ -3,13 +3,6 @@
   "permission": {
     "*": "allow"
   },
-  "model": "zai/glm-4.7",
-  "small_model": "zai/glm-4.7",
-  "provider": {
-    "zai": {
-      "options": {
-        "apiKey": "{env:ZAI_API_KEY}"
-      }
-    }
-  }
+  "model": "zai-coding-plan/glm-4.7",
+  "small_model": "zai-coding-plan/glm-4.7"
 }
