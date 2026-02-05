@@ -256,6 +256,8 @@ class ChatMessage(models.Model):
     body = models.TextField()
     github_comment_id = models.BigIntegerField[int, int](unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_hidden = models.BooleanField[bool, bool](default=False)
+    hidden_at = models.DateTimeField(null=True, blank=True)
 
 
 class AppSetting(models.Model):

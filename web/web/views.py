@@ -25,6 +25,8 @@ from django.middleware.csrf import get_token
 from django.shortcuts import redirect
 from django.templatetags.static import static
 from django.utils.html import escape
+from django.utils import timezone
+from django.utils.timezone import localtime
 from django.views.decorators.csrf import csrf_exempt
 from htpy import (
     Node,
@@ -55,6 +57,7 @@ from htpy import input as input_el
 from . import github
 from .github import parse_webhook_body, verify_webhook_signature
 from .models import (
+    ChatMessage,
     FeedbackSignal,
     GithubApp,
     GithubInstallation,
@@ -114,6 +117,9 @@ def layout(request: HttpRequest, content: Node, *, page_title: str) -> HttpRespo
                 "Dashboard"
             ],
             a(href="/rules", class_="hover:text-foreground transition-colors")["Rules"],
+            a(href="/feedback", class_="hover:text-foreground transition-colors")[
+                "Feedback"
+            ],
             a(href="/account", class_="hover:text-foreground transition-colors")[
                 "Account"
             ],
@@ -827,6 +833,356 @@ def add_rule(request: HttpRequest, rule_set_id: int) -> HttpResponse:
     return redirect("/rules")
 
 
+def delete_rule_set(request: HttpRequest, rule_set_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("/rules")
+    if not request.user.is_authenticated:
+        return redirect("/account")
+    rule_set = RuleSet.objects.filter(id=rule_set_id, owner=request.user).first()
+    if not rule_set:
+        raise Http404
+    rule_set.delete()
+    messages.success(request, "Rule set deleted.")
+    return redirect("/rules")
+
+
+def delete_rule(request: HttpRequest, rule_set_id: int, rule_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("/rules")
+    if not request.user.is_authenticated:
+        return redirect("/account")
+    rule_set = RuleSet.objects.filter(id=rule_set_id, owner=request.user).first()
+    if not rule_set:
+        raise Http404
+    Rule.objects.filter(id=rule_id, rule_set=rule_set).delete()
+    messages.success(request, "Rule deleted.")
+    return redirect("/rules")
+
+
+def feedback(request: HttpRequest) -> HttpResponse:
+    if not request.user.is_authenticated:
+        return redirect("/account")
+
+    repositories = (
+        GithubRepository.objects.filter(
+            is_active=True,
+            installation__github_app__owner=request.user,
+        )
+        .order_by("full_name")
+        .all()
+    )
+    repo_id_raw = request.GET.get("repo_id", "").strip()
+    valid_repo_ids = {repo.id for repo in repositories}
+    repo_id = (
+        int(repo_id_raw)
+        if repo_id_raw.isdigit() and int(repo_id_raw) in valid_repo_ids
+        else None
+    )
+
+    limit_raw = request.GET.get("limit", "").strip()
+    limit = 50
+    if limit_raw.isdigit():
+        limit = max(10, min(200, int(limit_raw)))
+
+    feedback_qs = FeedbackSignal.objects.select_related(
+        "review_comment__review_run__pull_request__repository"
+    ).filter(
+        review_comment__review_run__pull_request__repository__installation__github_app__owner=request.user
+    )
+    mention_qs = ChatMessage.objects.select_related(
+        "pull_request__repository",
+    ).filter(
+        pull_request__repository__installation__github_app__owner=request.user,
+        is_hidden=False,
+        body__icontains="@codereview",
+    )
+
+    if repo_id:
+        feedback_qs = feedback_qs.filter(
+            review_comment__review_run__pull_request__repository_id=repo_id
+        )
+        mention_qs = mention_qs.filter(pull_request__repository_id=repo_id)
+
+    recent_feedback = feedback_qs.order_by("-created_at")[:limit]
+    recent_mentions = mention_qs.order_by("-created_at")[:limit]
+
+    repo_select = select(
+        name="repo_id",
+        class_="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
+    )[
+        option(value="")["All repositories"],
+        *[
+            option(value=str(repo.id), selected=str(repo.id) == str(repo_id_raw))[
+                repo.full_name
+            ]
+            for repo in repositories
+        ],
+    ]
+
+    feedback_items: list[Renderable] = []
+    for signal in recent_feedback:
+        review_comment = signal.review_comment
+        review_run = review_comment.review_run
+        pull_request = review_run.pull_request
+        repo = pull_request.repository
+        created = localtime(signal.created_at).strftime("%Y-%m-%d %H:%M")
+        excerpt = (review_comment.body or "").strip().splitlines()[0:1]
+        excerpt_text = excerpt[0][:160] if excerpt else ""
+        github_link = ""
+        if pull_request.html_url and review_comment.github_comment_id:
+            github_link = f"{pull_request.html_url}#issuecomment-{review_comment.github_comment_id}"
+        feedback_items.append(
+            li(class_="rounded-lg border border-border/60 p-4")[
+                div(class_="flex flex-wrap items-center justify-between gap-3")[
+                    div(class_="grid gap-1")[
+                        strong[f"{repo.full_name} #{pull_request.pr_number}"],
+                        span(class_="text-xs text-muted-foreground")[
+                            f"{created} • signal={signal.signal}"
+                        ],
+                        a(
+                            href=github_link,
+                            class_="text-xs text-muted-foreground hover:text-foreground",
+                        )["Open comment in GitHub"]
+                        if github_link
+                        else span(),
+                        span(class_="text-sm text-muted-foreground")[
+                            escape(excerpt_text)
+                        ],
+                    ],
+                    div(class_="flex flex-wrap items-center gap-2")[
+                        form_component(
+                            action=f"/feedback/signals/{signal.id}/update",
+                            method="post",
+                            class_="flex items-center gap-2",
+                        )[
+                            csrf_input(request),
+                            select(
+                                name="signal",
+                                class_="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
+                            )[
+                                option(
+                                    value=FeedbackSignal.SIGNAL_LIKE,
+                                    selected=signal.signal
+                                    == FeedbackSignal.SIGNAL_LIKE,
+                                )["like"],
+                                option(
+                                    value=FeedbackSignal.SIGNAL_IGNORE,
+                                    selected=signal.signal
+                                    == FeedbackSignal.SIGNAL_IGNORE,
+                                )["ignore"],
+                                option(
+                                    value=FeedbackSignal.SIGNAL_DISLIKE,
+                                    selected=signal.signal
+                                    == FeedbackSignal.SIGNAL_DISLIKE,
+                                )["dislike"],
+                            ],
+                            button_component(
+                                type="submit",
+                                variant="outline",
+                                size="sm",
+                            )["Update"],
+                        ],
+                        form_component(
+                            action=f"/feedback/signals/{signal.id}/delete",
+                            method="post",
+                            class_="inline",
+                        )[
+                            csrf_input(request),
+                            button_component(
+                                type="submit",
+                                variant="destructive",
+                                size="sm",
+                            )["Delete"],
+                        ],
+                    ],
+                ]
+            ]
+        )
+
+    mention_items: list[Renderable] = []
+    for message in recent_mentions:
+        pull_request = message.pull_request
+        repo = pull_request.repository
+        created = localtime(message.created_at).strftime("%Y-%m-%d %H:%M")
+        first_line = (message.body or "").strip().splitlines()[0:1]
+        excerpt_text = first_line[0][:200] if first_line else ""
+        github_link = ""
+        if pull_request.html_url and message.github_comment_id:
+            github_link = (
+                f"{pull_request.html_url}#issuecomment-{message.github_comment_id}"
+            )
+        mention_items.append(
+            li(class_="rounded-lg border border-border/60 p-4")[
+                div(class_="flex flex-wrap items-center justify-between gap-3")[
+                    div(class_="grid gap-1")[
+                        strong[f"{repo.full_name} #{pull_request.pr_number}"],
+                        span(class_="text-xs text-muted-foreground")[
+                            f"{created} • author={message.author}"
+                        ],
+                        a(
+                            href=github_link,
+                            class_="text-xs text-muted-foreground hover:text-foreground",
+                        )["Open comment in GitHub"]
+                        if github_link
+                        else span(),
+                        span(class_="text-sm text-muted-foreground")[
+                            escape(excerpt_text)
+                        ],
+                    ],
+                    form_component(
+                        action=f"/feedback/mentions/{message.id}/delete",
+                        method="post",
+                        class_="inline",
+                    )[
+                        csrf_input(request),
+                        button_component(
+                            type="submit",
+                            variant="destructive",
+                            size="sm",
+                        )["Hide"],
+                    ],
+                ]
+            ]
+        )
+
+    content = div(class_="space-y-8")[
+        section_header(
+            "Feedback",
+            subtitle="Inspect and clean up what the reviewer has learned (per repo).",
+            align="left",
+        ),
+        card(title="Filter", description="Choose a repository to scope results.")[
+            form_component(action="/feedback", method="get", class_="max-w-xl")[
+                form_field[repo_select],
+                input_el(type="hidden", name="limit", value=str(limit)),
+                button_component(type="submit", variant="outline")["Apply"],
+            ]
+        ],
+        card(
+            title="Feedback signals",
+            description="Signals recorded from /ai like, /ai dislike, /ai ignore.",
+        )[
+            ul(class_="space-y-3")[*feedback_items]
+            if feedback_items
+            else p(class_="text-sm text-muted-foreground")[
+                "No feedback signals recorded yet."
+            ],
+            a(
+                href=_feedback_more_link(repo_id_raw, limit),
+                class_="text-sm text-muted-foreground hover:text-foreground",
+            )["Load more"]
+            if len(recent_feedback) == limit
+            else span(),
+        ],
+        card(
+            title="Mentions",
+            description="PR comments where @codereview was mentioned.",
+        )[
+            ul(class_="space-y-3")[*mention_items]
+            if mention_items
+            else p(class_="text-sm text-muted-foreground")[
+                "No @codereview mentions recorded yet."
+            ],
+            a(
+                href=_feedback_more_link(repo_id_raw, limit),
+                class_="text-sm text-muted-foreground hover:text-foreground",
+            )["Load more"]
+            if len(recent_mentions) == limit
+            else span(),
+        ],
+    ]
+    return layout(request, content, page_title="Feedback")
+
+
+def _feedback_more_link(repo_id_raw: str, limit: int) -> str:
+    new_limit = min(200, limit + 50)
+    if repo_id_raw:
+        return f"/feedback?repo_id={repo_id_raw}&limit={new_limit}"
+    return f"/feedback?limit={new_limit}"
+
+
+def update_feedback_signal(request: HttpRequest, signal_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("/feedback")
+    if not request.user.is_authenticated:
+        return redirect("/account")
+
+    signal = (
+        FeedbackSignal.objects.select_related(
+            "review_comment__review_run__pull_request__repository__installation__github_app"
+        )
+        .filter(
+            id=signal_id,
+            review_comment__review_run__pull_request__repository__installation__github_app__owner=request.user,
+        )
+        .first()
+    )
+    if not signal:
+        raise Http404
+
+    new_signal = request.POST.get("signal", "").strip()
+    allowed = {
+        FeedbackSignal.SIGNAL_LIKE,
+        FeedbackSignal.SIGNAL_IGNORE,
+        FeedbackSignal.SIGNAL_DISLIKE,
+    }
+    if new_signal not in allowed:
+        messages.error(request, "Invalid signal value.")
+        return redirect("/feedback")
+    signal.signal = new_signal
+    signal.save(update_fields=["signal"])
+    messages.success(request, "Feedback updated.")
+    return redirect("/feedback")
+
+
+def delete_feedback_signal(request: HttpRequest, signal_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("/feedback")
+    if not request.user.is_authenticated:
+        return redirect("/account")
+
+    signal = (
+        FeedbackSignal.objects.select_related(
+            "review_comment__review_run__pull_request__repository__installation__github_app"
+        )
+        .filter(
+            id=signal_id,
+            review_comment__review_run__pull_request__repository__installation__github_app__owner=request.user,
+        )
+        .first()
+    )
+    if not signal:
+        raise Http404
+    signal.delete()
+    messages.success(request, "Feedback deleted.")
+    return redirect("/feedback")
+
+
+def delete_mention_message(request: HttpRequest, message_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("/feedback")
+    if not request.user.is_authenticated:
+        return redirect("/account")
+
+    message = (
+        ChatMessage.objects.select_related(
+            "pull_request__repository__installation__github_app"
+        )
+        .filter(
+            id=message_id,
+            pull_request__repository__installation__github_app__owner=request.user,
+        )
+        .first()
+    )
+    if not message:
+        raise Http404
+    message.is_hidden = True
+    message.hidden_at = timezone.now()
+    message.save(update_fields=["is_hidden", "hidden_at"])
+    messages.success(request, "Message hidden.")
+    return redirect("/feedback")
+
+
 @csrf_exempt
 def github_webhook(request: HttpRequest) -> HttpResponse:
     return _github_webhook_impl(request, github_app=None)
@@ -1096,10 +1452,32 @@ def _rule_sets_block(
 ) -> list[Renderable]:
     blocks: list[Renderable] = []
     for rule_set in rule_sets:
+        repo_label = ""
+        if rule_set.scope == RuleSet.SCOPE_REPO and rule_set.repository:
+            repo_label = f" • repo={rule_set.repository.full_name}"
         rules = [
-            li[
-                strong[rule.title],
-                span(class_="text-muted-foreground")[f" — {escape(rule.description)}"],
+            li(class_="flex flex-wrap items-start justify-between gap-3")[
+                div(class_="grid gap-1")[
+                    strong[rule.title],
+                    span(class_="text-muted-foreground")[
+                        f" — {escape(rule.description)}"
+                    ],
+                    span(class_="text-xs text-muted-foreground")[
+                        f"severity={rule.severity}"
+                    ],
+                ],
+                form_component(
+                    action=f"/rules/{rule_set.id}/rules/{rule.id}/delete",
+                    method="post",
+                    class_="inline",
+                )[
+                    csrf_input(request),
+                    button_component(
+                        type="submit",
+                        variant="destructive",
+                        size="sm",
+                    )["Delete"],
+                ],
             ]
             for rule in rule_set.rules.all()
         ]
@@ -1107,7 +1485,19 @@ def _rule_sets_block(
         blocks.append(
             card(
                 title=rule_set.name,
-                description=f"Scope: {rule_set.scope}",
+                description=f"Scope: {rule_set.scope}{repo_label}",
+                action=form_component(
+                    action=f"/rules/{rule_set.id}/delete",
+                    method="post",
+                    class_="inline",
+                )[
+                    csrf_input(request),
+                    button_component(
+                        type="submit",
+                        variant="destructive",
+                        size="sm",
+                    )["Delete set"],
+                ],
             )[
                 p(class_="text-sm text-muted-foreground")[
                     rule_set.instructions or "No instructions yet."

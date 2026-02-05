@@ -34,5 +34,7 @@ dev = [
 typeCheckingMode = "basic"
 reportAttributeAccessIssue = false
 reportIncompatibleVariableOverride = false
+venvPath = "."
+venv = ".venv"
 include = ["web", "core"]
 exclude = ["**/migrations/**", "components/**", "staticfiles/**"]
